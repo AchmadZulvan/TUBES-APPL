@@ -966,3 +966,58 @@ Aplikasi Lapor Mangan! memiliki 24 use case yang terbagi menjadi:
 *Dibuat: 17 Desember 2024*  
 *Kelompok: [Nomor Kelompok]*  
 *Aplikasi: Lapor Mangan! - Purwokerto Culinary Finder*
+
+## 9. MAPPING IMPLEMENTASI (Use Case → Kode)
+
+Berikut peta cepat bagaimana setiap use case diimplementasikan dalam kode proyek (file dan fungsi utama):
+
+- **UC-01 (Lihat Daftar Kuliner)**: render dan template daftar
+   - File: [app-complete.js](app-complete.js)
+   - Fungsi utama: `renderKulinerList()` — menempelkan card ke elemen `#kulinerList` dan menggunakan `initialKulinerData` / `DB.get('kuliner')`.
+
+- **UC-02 (Lihat Detail Kuliner)**: modal detail dan tampilan review
+   - File: [app-complete.js](app-complete.js)
+   - Fungsi utama: `showDetail(id)`, `closeModal()` — menulis konten ke `#modalContent` dan membuka `#detailModal`.
+
+- **UC-03 / UC-04 (Filter & Cari Kuliner)**
+   - File: [app-complete.js](app-complete.js)
+   - Fungsi utama: `populateFilters()`, `applyFilters()` — menangani input `#searchInput`, filter dropdown, dan memanggil `renderKulinerList(filtered)`.
+
+- **UC-05 (Lihat Peta Lokasi)**
+   - File: [app-complete.js](app-complete.js)
+   - Fungsi utama: `initMap()`, `renderMarkers()` — inisialisasi Leaflet pada elemen `#map` dan menambahkan marker dengan popup yang memanggil `showDetail()`.
+
+- **UC-06 (Lihat Info Cuaca)**
+   - File: [app-complete.js](app-complete.js)
+   - Fungsi utama: `fetchWeather()`, `updateWeatherUI()` — menggunakan `wttr.in` sebagai fallback gratis dan menampilkan widget di `#weatherWidget`.
+
+- **UC-07 / UC-11 (Chatbot & Review)**
+   - File: [app-complete.js](app-complete.js), [knowledge-base.js](knowledge-base.js), [chatbot.js](chatbot.js)
+   - Modul/Objek: `MakanBotAI` (dalam `app-complete.js`) dan `knowledge-base.js` untuk kosakata/aturan; fungsi `sendChat()` membuka interaksi chatbot.
+   - Review: `submitReview(kulinerId)` menyimpan review ke `state.kulinerData` dan `DB.set('kuliner', ...)`.
+
+- **UC-08 / UC-09 / UC-10 (Auth & Profil)**
+   - File: [app-complete.js](app-complete.js), [index.html](index.html)
+   - Fungsi: `loginWithGoogle()` (simulasi OAuth dalam kode; production: gunakan Firebase/Auth), `logout()`, `updateAuthUI()`.
+
+- **UC-14 / UC-15 / UC-16 (Favorit)**
+   - File: [app-complete.js](app-complete.js)
+   - Fungsi: `toggleFavorite(id)`, `renderFavorites()` — favorites disimpan di localStorage dengan key `lm_favorites`.
+
+- **UC-17 / UC-18 / UC-19 (Submission & Moderation)**
+   - File: [app-complete.js](app-complete.js)
+   - Fungsi: `submitKuliner(e)` (menyimpan ke `submissions`), `renderAdmin()`, `approveSubmission(id)`, `rejectSubmission(id)`.
+
+- **UC-21..UC-24 (Admin: CRUD / Promo / Berita)**
+   - File: [app-complete.js](app-complete.js), [app-complete.css](app-complete.css)
+   - Fungsi: `renderAdmin()`, `renderPromo()`, `renderBerita()`, `approveSubmission()`, `deleteKuliner()`.
+
+- **PWA & Offline**
+   - File: [sw.js](sw.js), [manifest.json](manifest.json), [offline.html](offline.html)
+   - Fungsi: service worker untuk caching, manifest untuk instalasi PWA.
+
+- **Styling & Layout**
+   - File: [app-complete.css](app-complete.css), [style.css](style.css)
+   - Sumber gaya untuk modal, peta, daftar, dan komponen UI.
+
+Catatan: sebagian besar logika frontend berada di `app-complete.js` (single-page, localStorage as DB). Untuk implementasi production, beberapa fungsi (auth, file upload, persistence) perlu dihubungkan ke backend nyata atau Firebase.
