@@ -1316,6 +1316,7 @@ function initMap() {
         attribution: '© OpenStreetMap'
     }).addTo(state.map);
     renderMarkers();
+    startLiveTracking(); // Start simulation
 
     // Re-locate user button
     const locateBtn = document.querySelector('.map-locate-btn');
@@ -1331,18 +1332,37 @@ function renderMarkers(data = state.kulinerData) {
         const icon = item.keliling ? '🛵' : '📍';
         const marker = L.marker([item.lat, item.lng], {
             icon: L.divIcon({
-                html: `<div class="marker-icon ${item.keliling ? 'keliling' : ''}" style="background:white; padding:5px; border-radius:50%; box-shadow:0 2px 5px rgba(0,0,0,0.3); font-size:20px;">${icon}</div>`,
+                html: `<div class="marker-icon ${item.keliling ? 'keliling' : ''}" style="background:white; padding:5px; border-radius:50%; box-shadow:0 2px 5px rgba(0,0,0,0.3); font-size:20px; transition: all 0.5s ease;">${icon}</div>`,
                 className: '',
                 iconSize: [32, 32]
             })
         }).addTo(state.map);
 
+        marker.itemData = item; // Store ref
         marker.bindPopup(`<strong>${item.nama}</strong><br>${item.kategori}<br><button onclick="showDetail(${item.id})" class="btn-xs btn-primary" style="margin-top:5px;">Lihat Detail</button>`);
-        marker.on('click', () => {
-            // Optional: Center map
-        });
         state.markers.push(marker);
     });
+}
+
+// Live Tracking Simulation for "Gerobak Keliling"
+function startLiveTracking() {
+    setInterval(() => {
+        state.markers.forEach(marker => {
+            if (marker.itemData && marker.itemData.keliling) {
+                // Simulate small random movement
+                const oldLat = marker.getLatLng().lat;
+                const oldLng = marker.getLatLng().lng;
+                const newLat = oldLat + (Math.random() * 0.0002 - 0.0001);
+                const newLng = oldLng + (Math.random() * 0.0002 - 0.0001);
+
+                marker.setLatLng([newLat, newLng]);
+
+                // Update internal state slightly to persist if saved (optional)
+                marker.itemData.lat = newLat;
+                marker.itemData.lng = newLng;
+            }
+        });
+    }, 3000); // Move every 3 seconds
 }
 
 function sortByDistance() {
