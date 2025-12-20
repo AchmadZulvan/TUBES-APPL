@@ -1266,8 +1266,20 @@ window.AdminManager = AdminManager;
 
 function claimBusiness(id) {
     const item = state.kulinerData.find(k => k.id === id);
+    if (item.claimStatus === 'pending') {
+        showToast("Bisnis ini sedang menunggu verifikasi klaim. ⏳");
+        return;
+    }
+    if (item.claimStatus === 'verified') {
+        showToast("Bisnis ini sudah terverifikasi pemiliknya. ✅");
+        return;
+    }
+
     if (confirm(`Apakah Anda pemilik "${item.nama}"?\nKlaim bisnis ini untuk mengelola informasi.`)) {
+        item.claimStatus = 'pending';
+        DB.set('kuliner', state.kulinerData);
         showToast("Klaim berhasil dikirim! Tim kami akan memverifikasi. ✅");
+        showDetail(id); // Refresh modal
     }
 }
 window.claimBusiness = claimBusiness;
@@ -1549,8 +1561,8 @@ function showDetail(id) {
                 <button onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}', '_blank')" class="btn btn-primary" style="flex:1; padding:12px;">
                     <i class="fas fa-directions"></i> Petunjuk Arah
                 </button>
-                 <button onclick="claimBusiness(${item.id})" class="btn btn-secondary" style="flex:1; padding:12px;">
-                    <i class="fas fa-store-alt"></i> Klaim Bisnis
+                 <button onclick="claimBusiness(${item.id})" class="btn btn-secondary" style="flex:1; padding:12px; ${item.claimStatus ? 'opacity:0.7;' : ''}">
+                    <i class="fas fa-store-alt"></i> ${item.claimStatus === 'pending' ? 'Menunggu Verifikasi' : (item.claimStatus === 'verified' ? 'Milik Anda' : 'Klaim Bisnis')}
                 </button>
             </div>
             ${adminControls}
