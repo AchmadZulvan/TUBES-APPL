@@ -43,6 +43,10 @@
                 <i class="fas fa-cloud-sun" id="weatherIcon"></i>
                 <span id="weatherTemp">--°C</span>
             </div>
+            <button class="login-header-btn" id="loginHeaderBtn" onclick="toggleAuthModal()">
+                <i class="fas fa-sign-in-alt"></i>
+                <span>Masuk</span>
+            </button>
         </div>
     </header>
 
@@ -482,7 +486,7 @@
     <!-- User Dropdown Menu -->
     <div class="dropdown-menu" id="userDropdownMenu">
         <div class="dropdown-header">
-            <img src="" alt="User" id="dropdownAvatar" class="dropdown-avatar">
+            <img src="https://ui-avatars.com/api/?name=User&background=FF6B35&color=fff&bold=true" alt="User" id="dropdownAvatar" class="dropdown-avatar">
             <div class="dropdown-user-info">
                 <span class="dropdown-name" id="dropdownName">User</span>
                 <span class="dropdown-email" id="dropdownEmail">user@email.com</span>
@@ -608,6 +612,85 @@
 
 
     <script src="script.js?v=6"></script>
+
+    <!-- Check Login Status -->
+    <script>
+        // Check if user is logged in
+        function updateLoginUI() {
+            const currentUser = localStorage.getItem('lm_currentUser');
+            const loginBtn = document.getElementById('loginHeaderBtn');
+            const sidebarAuthBtn = document.getElementById('authBtnSidebar');
+            
+            if (currentUser) {
+                const user = JSON.parse(currentUser);
+                
+                // Update header button
+                if (loginBtn) {
+                    loginBtn.innerHTML = `
+                        <i class="fas fa-user-circle"></i>
+                        <span>${user.name.split(' ')[0]}</span>
+                    `;
+                    loginBtn.onclick = function() {
+                        // Toggle user dropdown
+                        const dropdown = document.getElementById('userDropdownMenu');
+                        if (dropdown) {
+                            dropdown.classList.toggle('show');
+                        }
+                    };
+                }
+                
+                // Update sidebar button
+                if (sidebarAuthBtn) {
+                    sidebarAuthBtn.innerHTML = `
+                        <i class="fas fa-user-circle"></i>
+                        <span>${user.name}</span>
+                    `;
+                    sidebarAuthBtn.onclick = function() {
+                        const dropdown = document.getElementById('userDropdownMenu');
+                        if (dropdown) {
+                            dropdown.classList.toggle('show');
+                        }
+                        return false;
+                    };
+                }
+                
+                // Update dropdown info
+                const dropdownName = document.getElementById('dropdownName');
+                const dropdownEmail = document.getElementById('dropdownEmail');
+                const dropdownAvatar = document.getElementById('dropdownAvatar');
+                if (dropdownName) dropdownName.textContent = user.name;
+                if (dropdownEmail) dropdownEmail.textContent = user.email;
+                if (dropdownAvatar) {
+                    const userName = encodeURIComponent(user.name);
+                    dropdownAvatar.src = `https://ui-avatars.com/api/?name=${userName}&background=FF6B35&color=fff&bold=true`;
+                }
+            }
+        }
+        
+        // Call on page load
+        document.addEventListener('DOMContentLoaded', updateLoginUI);
+        
+        // Logout function
+        window.signOut = function() {
+            if (confirm('Yakin ingin keluar?')) {
+                localStorage.removeItem('lm_currentUser');
+                window.location.reload();
+            }
+        };
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('userDropdownMenu');
+            const loginBtn = document.getElementById('loginHeaderBtn');
+            const sidebarAuthBtn = document.getElementById('authBtnSidebar');
+            
+            if (dropdown && !dropdown.contains(event.target) && 
+                event.target !== loginBtn && !loginBtn.contains(event.target) &&
+                event.target !== sidebarAuthBtn && !sidebarAuthBtn.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+    </script>
 
     <!-- Service Worker Registration -->
     <script>

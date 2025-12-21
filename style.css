@@ -347,6 +347,42 @@ a {
     gap: var(--space-3);
 }
 
+/* Login Header Button */
+.login-header-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: var(--primary-gradient);
+    color: white;
+    border: none;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-base);
+    box-shadow: var(--shadow-sm);
+}
+
+.login-header-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+}
+
+.login-header-btn i {
+    font-size: 16px;
+}
+
+.login-header-btn span {
+    display: none;
+}
+
+@media (min-width: 480px) {
+    .login-header-btn span {
+        display: inline;
+    }
+}
+
 /* Weather Widget */
 .weather-widget {
     display: flex;

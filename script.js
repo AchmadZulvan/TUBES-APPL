@@ -24,7 +24,10 @@ const DB = {
             DB.set('kuliner', initialKulinerData);
             DB.set('berita', initialBeritaData);
             DB.set('promo', initialPromoData);
-            DB.set('users', [{ id: 1, email: 'admin@lapormangan.id', name: 'Admin', role: 'admin' }]);
+            DB.set('users', [
+                { id: 1, email: 'admin@lapormangan.id', name: 'Admin', password: 'admin123', role: 'admin' },
+                { id: 2, email: 'user@test.com', name: 'User Test', password: '123456', role: 'user' }
+            ]);
             DB.set('submissions', []);
             DB.set('initialized', true);
             localStorage.setItem('lm_initialized_v3', 'true');
@@ -1052,7 +1055,10 @@ function loginWithGoogle() {
     }
 }
 function closeLoginModal() { document.getElementById('loginModal').classList.remove('show'); }
-function toggleAuthModal() { document.getElementById('loginModal').classList.add('show'); }
+function toggleAuthModal() { 
+    // Redirect to login page
+    window.location.href = 'login.html';
+}
 
 // Run
 window.showDetail = showDetail; // Expose
