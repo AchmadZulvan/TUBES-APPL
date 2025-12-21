@@ -691,6 +691,9 @@ function showDetail(id) {
     const item = state.kulinerData.find(k => k.id === id);
     if (!item) return;
 
+    // Normalize reviews so rendering & submit logic are safe
+    if (!Array.isArray(item.reviews)) item.reviews = [];
+
     const isFav = state.favorites.has(id);
     const detailContent = document.getElementById('modalContent');
     const adminControls = state.isAdmin ?
@@ -699,6 +702,8 @@ function showDetail(id) {
             <button onclick="showSubmitForm(${item.id}); closeModal();" class="btn-xs" style="background:#ffc107; color:black; margin-top:5px; margin-right:5px;">Edit Data</button>
             <button onclick="AdminManager.deleteKuliner(${item.id})" class="btn-xs" style="background:red; color:white; margin-top:5px;">Hapus Data</button>
          </div>` : '';
+
+    const reviews = item.reviews;
 
     detailContent.innerHTML = `
         <div style="position:relative;">
@@ -733,7 +738,6 @@ function showDetail(id) {
                     <i class="fas fa-store-alt"></i> ${item.claimStatus === 'pending' ? 'Menunggu Verifikasi' : (item.claimStatus === 'verified' ? 'Milik Anda' : 'Klaim Bisnis')}
                 </button>
             </div>
-/* Menu Display */
             <div style="margin-top:20px;">
                 <h3 style="font-size:16px; border-bottom:2px solid #eee; padding-bottom:5px;">📋 Daftar Menu</h3>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
@@ -745,14 +749,12 @@ function showDetail(id) {
                 </div>
             </div>
 
-            /* Reviews Section */
             <div style="margin-top:20px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #eee; padding-bottom:5px;">
-                    <h3 style="font-size:16px; margin:0;">⭐ Ulasan (${item.reviews.length})</h3>
+                    <h3 style="font-size:16px; margin:0;">⭐ Ulasan (${reviews.length})</h3>
                     <button onclick="toggleReviewForm()" class="btn-xs" style="background:var(--primary); color:white;">+ Tulis Review</button>
                 </div>
-                
-                /* Review Form (Hidden) */
+
                 <div id="reviewForm" style="display:none; background:#f9f9f9; padding:15px; border-radius:10px; margin-top:10px;">
                     <h4 style="margin-top:0;">Bagikan Pengalamanmu</h4>
                     <select id="reviewRating" style="width:100%; padding:8px; margin-bottom:10px; border-radius:5px;">
@@ -766,9 +768,8 @@ function showDetail(id) {
                     <button onclick="submitReview(${item.id})" style="background:var(--primary); color:white; padding:8px 15px; border-radius:5px; margin-top:5px; border:none; width:100%;">Kirim Ulasan</button>
                 </div>
 
-                /* Review List */
                 <div style="margin-top:10px; max-height:200px; overflow-y:auto;">
-                    ${item.reviews.length > 0 ? item.reviews.map(r => `
+                    ${reviews.length > 0 ? reviews.map(r => `
                         <div style="padding:10px; border-bottom:1px solid #eee;">
                             <div style="display:flex; justify-content:space-between;">
                                 <b>${r.name}</b>
@@ -788,6 +789,68 @@ function showDetail(id) {
     document.getElementById('detailModal').classList.add('show');
     state.map.setView([item.lat, item.lng], 16);
 }
+
+// ============================================
+// REVIEWS (Ulasan)
+// ============================================
+function toggleReviewForm() {
+    const form = document.getElementById('reviewForm');
+    if (!form) return;
+
+    const isHidden = form.style.display === 'none' || form.style.display === '';
+    form.style.display = isHidden ? 'block' : 'none';
+
+    // focus textarea when opened
+    if (isHidden) {
+        const textarea = document.getElementById('reviewText');
+        if (textarea) textarea.focus();
+    }
+}
+
+function submitReview(kulinerId) {
+    const item = state.kulinerData.find(k => k.id === kulinerId);
+    if (!item) return;
+    if (!Array.isArray(item.reviews)) item.reviews = [];
+
+    const ratingEl = document.getElementById('reviewRating');
+    const textEl = document.getElementById('reviewText');
+    const rating = ratingEl ? parseInt(ratingEl.value, 10) : 5;
+    const comment = textEl ? textEl.value.trim() : '';
+
+    if (!comment) {
+        showToast('Komentar tidak boleh kosong', 'error');
+        return;
+    }
+
+    // Use logged-in user if available, otherwise ask for a name
+    let userName = (state.currentUser && state.currentUser.name) ? state.currentUser.name : '';
+    let userId = (state.currentUser && state.currentUser.id) ? state.currentUser.id : null;
+
+    if (!userName) {
+        userName = prompt('Nama kamu untuk ulasan ini:', 'Pengunjung') || 'Pengunjung';
+        userName = userName.trim() || 'Pengunjung';
+    }
+
+    item.reviews.unshift({
+        userId,
+        name: userName,
+        rating: Number.isFinite(rating) ? Math.min(5, Math.max(1, rating)) : 5,
+        comment,
+        date: new Date().toISOString().split('T')[0]
+    });
+
+    DB.set('kuliner', state.kulinerData);
+    showToast('Ulasan berhasil dikirim ✅');
+
+    // Re-render modal so count/list updates, and hide the form again
+    showDetail(kulinerId);
+    const form = document.getElementById('reviewForm');
+    if (form) form.style.display = 'none';
+}
+
+// Expose for inline onclick handlers
+window.toggleReviewForm = toggleReviewForm;
+window.submitReview = submitReview;
 
 function closeModal() {
     document.getElementById('detailModal').classList.remove('show');
