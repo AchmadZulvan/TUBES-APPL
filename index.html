@@ -561,6 +561,13 @@
         <a href="#" class="dropdown-item" onclick="showMyContributions()">
             <i class="fas fa-plus-circle"></i> Kontribusi Saya
         </a>
+
+        <!-- Admin only: Review submissions (UC-19) -->
+        <a href="#" class="dropdown-item" id="reviewSubmissionsDropdown" style="display:none;" onclick="openSubmissionsFromDropdown(); return false;">
+            <i class="fas fa-clipboard-check"></i>
+            <span>Review Submission</span>
+            <span class="nav-badge" id="pendingSubmissionsBadgeDropdown" style="display:none;">0</span>
+        </a>
         <div class="dropdown-divider"></div>
         <a href="#" class="dropdown-item" onclick="openSettings()">
             <i class="fas fa-cog"></i> Pengaturan
@@ -670,7 +677,7 @@
 
 
 
-    <script src="script.js?v=11"></script>
+    <script src="script.js?v=12"></script>
 
     <!-- Check Login Status -->
     <script>

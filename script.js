@@ -32,6 +32,53 @@ const DB = {
             DB.set('initialized', true);
             localStorage.setItem('lm_initialized_v3', 'true');
         }
+
+        // Seed demo submission (one-time) so UC-19 can be demonstrated immediately.
+        // This runs even for existing users who already have lm_initialized_v3.
+        try {
+            if (!localStorage.getItem('lm_seeded_submissions_v1')) {
+                const submissions = DB.get('submissions', []);
+                const list = Array.isArray(submissions) ? submissions : [];
+                const hasPending = list.some(s => s && (s.status || 'pending') === 'pending');
+
+                if (!hasPending) {
+                    const example = {
+                        id: Date.now() - 12345,
+                        status: 'pending',
+                        submittedAt: new Date().toISOString(),
+                        userId: 2,
+                        userName: 'User Test',
+                        data: {
+                            nama: 'Bakso Pak Joko (Contoh)',
+                            kategori: 'Bakso',
+                            alamat: 'Jl. Jenderal Sudirman, Purwokerto',
+                            jam: '10:00 - 21:00',
+                            harga: 'Rp12.000 - Rp25.000',
+                            deskripsi: 'Ini adalah contoh submission untuk demo UC-19. Bakso urat, bakso halus, dan mie ayam dengan kuah gurih. (Data dapat dihapus/ditolak/di-approve oleh admin.)',
+                            foto: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?w=800',
+                            fotos: [
+                                'https://images.unsplash.com/photo-1585032226651-759b368d7246?w=800',
+                                'https://images.unsplash.com/photo-1550547660-d9450f859349?w=800'
+                            ],
+                            lat: -7.4249,
+                            lng: 109.2416,
+                            keliling: false,
+                            halal: 'halal-self',
+                            kontak: '0812-0000-0000',
+                            parkir: 'Tersedia',
+                            verified: false,
+                            reviews: []
+                        }
+                    };
+                    list.unshift(example);
+                    DB.set('submissions', list);
+                }
+
+                localStorage.setItem('lm_seeded_submissions_v1', 'true');
+            }
+        } catch {
+            // ignore
+        }
     }
 };
 
@@ -672,15 +719,31 @@ function getPendingCount() {
 function updateAdminUI() {
     const nav = document.getElementById('reviewSubmissionsNav');
     if (nav) nav.style.display = state.isAdmin ? '' : 'none';
+
+    const dd = document.getElementById('reviewSubmissionsDropdown');
+    if (dd) dd.style.display = state.isAdmin ? '' : 'none';
+
     updatePendingBadge();
 }
 
 function updatePendingBadge() {
-    const badge = document.getElementById('pendingSubmissionsBadge');
-    if (!badge) return;
     const count = getPendingCount();
-    badge.textContent = String(count);
-    badge.style.display = (state.isAdmin && count > 0) ? '' : 'none';
+
+    const badges = [
+        document.getElementById('pendingSubmissionsBadge'),
+        document.getElementById('pendingSubmissionsBadgeDropdown')
+    ].filter(Boolean);
+
+    badges.forEach((badge) => {
+        badge.textContent = String(count);
+        badge.style.display = (state.isAdmin && count > 0) ? '' : 'none';
+    });
+}
+
+function openSubmissionsFromDropdown() {
+    const dropdown = document.getElementById('userDropdownMenu');
+    if (dropdown) dropdown.classList.remove('show');
+    openSubmissionsModal();
 }
 
 function setSubmissionFilter(status) {
@@ -1044,6 +1107,7 @@ function wireSimpleModalClose(modalId, onClose) {
 
 // Expose handlers (inline onclick)
 window.openSubmissionsModal = openSubmissionsModal;
+window.openSubmissionsFromDropdown = openSubmissionsFromDropdown;
 window.closeSubmissionsModal = closeSubmissionsModal;
 window.setSubmissionFilter = setSubmissionFilter;
 window.openSubmissionDetail = openSubmissionDetail;
