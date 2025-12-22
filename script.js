@@ -338,6 +338,8 @@ let state = {
     kulinerData: [],
     favorites: new Set(),
     map: null,
+    detailMap: null,
+    detailMarker: null,
     markers: [],
     weather: null
 };
@@ -588,6 +590,9 @@ function setupEventListeners() {
     // Checkbox Filter
     const openNow = document.getElementById('openNowFilter');
     if (openNow) openNow.addEventListener('change', applyFilters);
+
+    // Detail modal close on backdrop click + ESC
+    wireDetailModalClose();
 }
 
 function applyFilters() {
@@ -695,7 +700,9 @@ function showDetail(id) {
     if (!Array.isArray(item.reviews)) item.reviews = [];
 
     const isFav = state.favorites.has(id);
+    const modal = document.getElementById('detailModal');
     const detailContent = document.getElementById('modalContent');
+    if (!modal || !detailContent) return;
     const adminControls = state.isAdmin ?
         `<div style="background:#ffebee; padding:10px; margin-top:10px; border-radius:8px; border:1px solid red;">
             <b>🔧 Admin Zone</b><br>
@@ -704,90 +711,163 @@ function showDetail(id) {
          </div>` : '';
 
     const reviews = item.reviews;
+    const avgRating = getAvgRating(item);
+    const openNow = isOpen(item.jam);
+    const halalInfo = getHalalInfo(item.halal);
+    const photos = getItemPhotos(item);
+
+    modal.dataset.kulinerId = String(id);
 
     detailContent.innerHTML = `
-        <div style="position:relative;">
-            <img src="${item.foto}" style="width:100%; height:200px; object-fit:cover; border-radius:10px;">
-            <button onclick="toggleFavorite(${item.id})" style="position:absolute; top:10px; right:10px; background:white; border:none; border-radius:50%; width:40px; height:40px; box-shadow:0 2px 5px rgba(0,0,0,0.2); cursor:pointer;">
-                <i class="${isFav ? 'fas' : 'far'} fa-heart" style="color:${isFav ? 'red' : '#333'}; font-size:20px;"></i>
-            </button>
-        </div>
-        
-        <div style="padding:15px 0;">
-            <div style="display:flex; justify-content:space-between; align-items:start;">
-                <h2 style="margin:0;">${item.nama}</h2>
-                <span style="background:#eee; padding:4px 8px; border-radius:4px; font-size:12px;">${item.kategori}</span>
-            </div>
-            
-            <p style="color:#666; margin:5px 0;"><i class="fas fa-map-marker-alt"></i> ${item.alamat}</p>
-            
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:15px 0; background:#f9f9f9; padding:10px; border-radius:10px;">
-                <div><small>Jam Buka</small><br><b>${item.jam}</b></div>
-                <div><small>Harga</small><br><b>${item.harga}</b></div>
-                <div><small>Parkir</small><br><b>${item.parkir || '-'}</b></div>
-                <div><small>Tipe</small><br><b>${item.keliling ? 'Keliling 🛵' : 'Tetap 🏠'}</b></div>
-            </div>
-
-            <p style="color:#444; line-height:1.5;">${item.deskripsi}</p>
-            
-            <div style="display:flex; gap:10px; margin-top:15px;">
-                <button onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}', '_blank')" class="btn btn-primary" style="flex:1; padding:12px;">
-                    <i class="fas fa-directions"></i> Petunjuk Arah
-                </button>
-                 <button onclick="claimBusiness(${item.id})" class="btn btn-secondary" style="flex:1; padding:12px; ${item.claimStatus ? 'opacity:0.7;' : ''}">
-                    <i class="fas fa-store-alt"></i> ${item.claimStatus === 'pending' ? 'Menunggu Verifikasi' : (item.claimStatus === 'verified' ? 'Milik Anda' : 'Klaim Bisnis')}
-                </button>
-            </div>
-            <div style="margin-top:20px;">
-                <h3 style="font-size:16px; border-bottom:2px solid #eee; padding-bottom:5px;">📋 Daftar Menu</h3>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
-                    ${item.menu && item.menu.length > 0 ? item.menu.map(m => `
-                        <div style="background:white; padding:8px; border:1px solid #eee; border-radius:6px;">
-                            ${m.name} <span style="float:right; color:orange;">${m.price}</span>
-                        </div>
-                    `).join('') : '<p style="grid-column: 1 / -1; color:#999; text-align:center;">Informasi menu belum tersedia.</p>'}
-                </div>
-            </div>
-
-            <div style="margin-top:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #eee; padding-bottom:5px;">
-                    <h3 style="font-size:16px; margin:0;">⭐ Ulasan (${reviews.length})</h3>
-                    <button onclick="toggleReviewForm()" class="btn-xs" style="background:var(--primary); color:white;">+ Tulis Review</button>
-                </div>
-
-                <div id="reviewForm" style="display:none; background:#f9f9f9; padding:15px; border-radius:10px; margin-top:10px;">
-                    <h4 style="margin-top:0;">Bagikan Pengalamanmu</h4>
-                    <select id="reviewRating" style="width:100%; padding:8px; margin-bottom:10px; border-radius:5px;">
-                        <option value="5">⭐⭐⭐⭐⭐ (Sangat Enak)</option>
-                        <option value="4">⭐⭐⭐⭐ (Enak)</option>
-                        <option value="3">⭐⭐⭐ (Biasa Aja)</option>
-                        <option value="2">⭐⭐ (Kurang)</option>
-                        <option value="1">⭐ (Sangat Kurang)</option>
-                    </select>
-                    <textarea id="reviewText" placeholder="Tulis ulasanmu di sini..." style="width:100%; height:80px; padding:8px; border-radius:5px; border:1px solid #ccc;"></textarea>
-                    <button onclick="submitReview(${item.id})" style="background:var(--primary); color:white; padding:8px 15px; border-radius:5px; margin-top:5px; border:none; width:100%;">Kirim Ulasan</button>
-                </div>
-
-                <div style="margin-top:10px; max-height:200px; overflow-y:auto;">
-                    ${reviews.length > 0 ? reviews.map(r => `
-                        <div style="padding:10px; border-bottom:1px solid #eee;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <b>${r.name}</b>
-                                <span style="color:orange;">${'⭐'.repeat(r.rating)}</span>
+        <div class="detail-layout">
+            <div class="detail-hero">
+                <div class="detail-carousel" aria-label="Foto kuliner">
+                    <div class="detail-carousel-track" id="detailCarouselTrack">
+                        ${photos.map((src, i) => `
+                            <div class="detail-carousel-slide">
+                                <img src="${escapeHtml(src)}" alt="Foto ${i + 1} ${escapeHtml(item.nama)}" loading="lazy" onerror="this.src='https://via.placeholder.com/800x400?text=No+Image'">
                             </div>
-                            <p style="margin:5px 0; color:#555; font-size:13px;">${r.comment}</p>
-                            <small style="color:#999;">${r.date}</small>
+                        `).join('')}
+                    </div>
+
+                    ${photos.length > 1 ? `
+                        <button type="button" class="carousel-btn prev" id="detailCarouselPrev" aria-label="Foto sebelumnya">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button type="button" class="carousel-btn next" id="detailCarouselNext" aria-label="Foto berikutnya">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <div class="carousel-dots" id="detailCarouselDots" aria-label="Indikator foto">
+                            ${photos.map((_, i) => `<button type="button" class="carousel-dot" data-index="${i}" aria-label="Foto ${i + 1}"></button>`).join('')}
                         </div>
-                    `).join('') : '<p style="color:#999; text-align:center; padding:10px;">Belum ada ulasan. Jadilah yang pertama!</p>'}
+                    ` : ''}
+
+                    <button type="button" class="detail-fav-btn" id="detailFavBtn" aria-label="Favorit" aria-pressed="${isFav ? 'true' : 'false'}" onclick="toggleFavorite(${item.id}); return false;">
+                        <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
+                    </button>
                 </div>
             </div>
 
-            ${adminControls}
+            <div class="detail-body">
+                <div class="detail-title-row">
+                    <h2 class="detail-title">${escapeHtml(item.nama)}</h2>
+                    <span class="detail-badge">${escapeHtml(item.kategori || '-')}</span>
+                </div>
+
+                <div class="detail-meta">
+                    <div class="detail-rating" title="Rating">
+                        <span class="stars">${renderStars(avgRating)}</span>
+                        <span class="rating-num">${Number.isFinite(avgRating) ? avgRating.toFixed(1) : '0.0'}</span>
+                    </div>
+                    <span class="detail-chip ${openNow ? 'open' : 'closed'}">${openNow ? 'Buka' : 'Tutup'}</span>
+                    <span class="detail-chip halal">${escapeHtml(halalInfo.label)}</span>
+                </div>
+
+                <div class="detail-info">
+                    <div class="detail-info-row"><i class="fas fa-map-marker-alt"></i><span>${escapeHtml(item.alamat || '-')}</span></div>
+                    <div class="detail-info-grid">
+                        <div class="detail-info-card"><small>Jam Operasional</small><div><b>${escapeHtml(item.jam || '-')}</b></div></div>
+                        <div class="detail-info-card"><small>Harga</small><div><b>${escapeHtml(item.harga || '-')}</b></div></div>
+                        <div class="detail-info-card"><small>Kontak</small><div><b>${escapeHtml(item.kontak || '-')}</b></div></div>
+                        <div class="detail-info-card"><small>Parkir</small><div><b>${escapeHtml(item.parkir || '-')}</b></div></div>
+                        <div class="detail-info-card"><small>Tipe</small><div><b>${item.keliling ? 'Keliling' : 'Tetap'}</b></div></div>
+                        <div class="detail-info-card"><small>Status Halal</small><div><b>${escapeHtml(halalInfo.text)}</b></div></div>
+                    </div>
+                </div>
+
+                <div class="detail-mini-map-wrap" aria-label="Peta lokasi">
+                    <div id="detailMiniMap" class="detail-mini-map"></div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>Deskripsi</h3>
+                    <p>${escapeHtml(item.deskripsi || '-')}</p>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-header">
+                        <h3>Daftar Menu</h3>
+                        <button onclick="claimBusiness(${item.id}); return false;" class="btn btn-secondary btn-sm ${item.claimStatus ? 'is-disabled' : ''}">
+                            <i class="fas fa-store-alt"></i>
+                            ${item.claimStatus === 'pending' ? 'Menunggu Verifikasi' : (item.claimStatus === 'verified' ? 'Milik Anda' : 'Klaim Bisnis')}
+                        </button>
+                    </div>
+                    <div class="detail-menu-grid">
+                        ${item.menu && item.menu.length > 0 ? item.menu.map(m => `
+                            <div class="detail-menu-item">
+                                <span class="detail-menu-name">${escapeHtml(m.name || '')}</span>
+                                <span class="detail-menu-price">${escapeHtml(m.price || '')}</span>
+                            </div>
+                        `).join('') : '<div class="detail-empty">Informasi menu belum tersedia.</div>'}
+                    </div>
+                </div>
+
+                <div class="detail-section" id="detailReviewSection">
+                    <div class="detail-section-header">
+                        <h3>Ulasan (${reviews.length})</h3>
+                        <button onclick="toggleReviewForm(); return false;" class="btn btn-primary btn-sm">
+                            <i class="fas fa-star"></i> Tulis Review
+                        </button>
+                    </div>
+
+                    <div id="reviewForm" class="detail-review-form" style="display:none;">
+                        <h4>Bagikan Pengalamanmu</h4>
+                        <select id="reviewRating" class="detail-review-input">
+                            <option value="5">⭐⭐⭐⭐⭐ (Sangat Enak)</option>
+                            <option value="4">⭐⭐⭐⭐ (Enak)</option>
+                            <option value="3">⭐⭐⭐ (Biasa Aja)</option>
+                            <option value="2">⭐⭐ (Kurang)</option>
+                            <option value="1">⭐ (Sangat Kurang)</option>
+                        </select>
+                        <textarea id="reviewText" class="detail-review-input" placeholder="Tulis ulasanmu di sini..."></textarea>
+                        <button onclick="submitReview(${item.id}); return false;" class="btn btn-primary" style="width:100%;">
+                            Kirim Ulasan
+                        </button>
+                    </div>
+
+                    <div class="detail-review-list">
+                        ${reviews.length > 0 ? reviews.map(r => `
+                            <div class="detail-review-item">
+                                <div class="detail-review-head">
+                                    <b>${escapeHtml(r.name || 'Pengunjung')}</b>
+                                    <span class="detail-review-stars">${'⭐'.repeat(Math.min(5, Math.max(1, Number(r.rating) || 1)))}</span>
+                                </div>
+                                <p>${escapeHtml(r.comment || '')}</p>
+                                <small>${escapeHtml(r.date || '')}</small>
+                            </div>
+                        `).join('') : '<div class="detail-empty">Belum ada ulasan. Jadilah yang pertama!</div>'}
+                    </div>
+                </div>
+
+                ${adminControls}
+            </div>
+
+            <div class="detail-footer-actions" role="group" aria-label="Aksi">
+                <button type="button" class="detail-action" id="detailFavFooterBtn" onclick="toggleFavorite(${item.id}); return false;" aria-label="Favorit" aria-pressed="${isFav ? 'true' : 'false'}">
+                    <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
+                    <span>Favorit</span>
+                </button>
+                <button type="button" class="detail-action" onclick="openDetailReview(); return false;" aria-label="Review">
+                    <i class="fas fa-star"></i>
+                    <span>Review</span>
+                </button>
+                <button type="button" class="detail-action primary" onclick="openNavigation(${Number(item.lat)}, ${Number(item.lng)}); return false;" aria-label="Navigasi">
+                    <i class="fas fa-directions"></i>
+                    <span>Navigasi</span>
+                </button>
+                <button type="button" class="detail-action" onclick="closeDetail(); return false;" aria-label="Tutup">
+                    <i class="fas fa-times"></i>
+                    <span>Tutup</span>
+                </button>
+            </div>
         </div>
     `;
 
-    document.getElementById('detailModal').classList.add('show');
-    state.map.setView([item.lat, item.lng], 16);
+    modal.classList.add('show');
+
+    // Init carousel & mini map after modal is visible
+    initDetailCarousel();
+    setTimeout(() => initDetailMiniMap(item), 50);
 }
 
 // ============================================
@@ -853,8 +933,198 @@ window.toggleReviewForm = toggleReviewForm;
 window.submitReview = submitReview;
 
 function closeModal() {
-    document.getElementById('detailModal').classList.remove('show');
+    const modal = document.getElementById('detailModal');
+    if (modal) modal.classList.remove('show');
+
+    // Clean up mini map to avoid memory leaks
+    if (state.detailMap) {
+        try { state.detailMap.remove(); } catch { /* ignore */ }
+        state.detailMap = null;
+        state.detailMarker = null;
+    }
 }
+
+// ============================================
+// DETAIL MODAL (UC-02 Enhancements)
+// ============================================
+function getItemPhotos(item) {
+    const out = [];
+    const add = (u) => {
+        const s = String(u || '').trim();
+        if (!s) return;
+        if (!out.includes(s)) out.push(s);
+    };
+    if (item && Array.isArray(item.fotos)) item.fotos.forEach(add);
+    if (item && item.foto) add(item.foto);
+    if (!out.length) out.push('https://via.placeholder.com/800x400?text=No+Image');
+    return out;
+}
+
+function renderStars(avg) {
+    const v = Number.isFinite(avg) ? avg : 0;
+    const full = Math.round(v);
+    let html = '';
+    for (let i = 1; i <= 5; i++) {
+        html += `<i class="${i <= full ? 'fas' : 'far'} fa-star"></i>`;
+    }
+    return html;
+}
+
+function getHalalInfo(value) {
+    const v = String(value || 'unknown');
+    if (v === 'halal') return { label: 'Halal', text: 'Halal MUI' };
+    if (v === 'halal-self') return { label: 'Halal', text: 'Halal (Self-Declared)' };
+    return { label: 'Halal?', text: 'Belum Diketahui' };
+}
+
+function initDetailCarousel() {
+    const track = document.getElementById('detailCarouselTrack');
+    if (!track) return;
+
+    const slides = Array.from(track.children || []);
+    const total = slides.length;
+    let index = 0;
+
+    const dotsWrap = document.getElementById('detailCarouselDots');
+    const dots = dotsWrap ? Array.from(dotsWrap.querySelectorAll('.carousel-dot')) : [];
+    const prevBtn = document.getElementById('detailCarouselPrev');
+    const nextBtn = document.getElementById('detailCarouselNext');
+
+    const setIndex = (i) => {
+        if (!total) return;
+        index = ((i % total) + total) % total;
+        track.style.transform = `translateX(-${index * 100}%)`;
+        dots.forEach((d, di) => d.classList.toggle('active', di === index));
+    };
+
+    setIndex(0);
+
+    if (prevBtn) prevBtn.onclick = () => setIndex(index - 1);
+    if (nextBtn) nextBtn.onclick = () => setIndex(index + 1);
+    dots.forEach((d) => {
+        d.onclick = () => setIndex(Number(d.dataset.index || '0'));
+    });
+
+    // Swipe support
+    let startX = null;
+    let startY = null;
+    track.onpointerdown = (e) => {
+        startX = e.clientX;
+        startY = e.clientY;
+    };
+    track.onpointerup = (e) => {
+        if (startX == null || startY == null) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        startX = null;
+        startY = null;
+        // Ignore vertical scroll intent
+        if (Math.abs(dy) > Math.abs(dx)) return;
+        if (Math.abs(dx) < 30) return;
+        if (dx < 0) setIndex(index + 1);
+        else setIndex(index - 1);
+    };
+}
+
+function initDetailMiniMap(item) {
+    if (typeof L === 'undefined') return;
+    const el = document.getElementById('detailMiniMap');
+    if (!el) return;
+
+    // Destroy previous instance
+    if (state.detailMap) {
+        try { state.detailMap.remove(); } catch { /* ignore */ }
+        state.detailMap = null;
+        state.detailMarker = null;
+    }
+
+    const lat = Number(item?.lat);
+    const lng = Number(item?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    state.detailMap = L.map(el, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: true,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false
+    }).setView([lat, lng], 16);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(state.detailMap);
+
+    state.detailMarker = L.marker([lat, lng]).addTo(state.detailMap);
+    try { state.detailMap.invalidateSize(); } catch { /* ignore */ }
+}
+
+function openNavigation(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+}
+
+function openDetailReview() {
+    // ensure review form visible
+    const form = document.getElementById('reviewForm');
+    if (form && (form.style.display === 'none' || form.style.display === '')) {
+        toggleReviewForm();
+    }
+    const section = document.getElementById('detailReviewSection');
+    if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleFavorite(id) {
+    const numId = Number(id);
+    if (!Number.isFinite(numId)) return;
+
+    const willFav = !state.favorites.has(numId);
+    if (willFav) state.favorites.add(numId);
+    else state.favorites.delete(numId);
+
+    DB.set('favorites', Array.from(state.favorites));
+    updateFavoriteUI(numId);
+    showToast(willFav ? 'Ditambahkan ke favorit' : 'Dihapus dari favorit');
+}
+
+function updateFavoriteUI(id) {
+    const isFav = state.favorites.has(id);
+    const setBtn = (btn) => {
+        if (!btn) return;
+        btn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = `${isFav ? 'fas' : 'far'} fa-heart`;
+        }
+    };
+    setBtn(document.getElementById('detailFavBtn'));
+    setBtn(document.getElementById('detailFavFooterBtn'));
+}
+
+function wireDetailModalClose() {
+    const modal = document.getElementById('detailModal');
+    if (modal && !modal.dataset.backdropWired) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+        modal.dataset.backdropWired = 'true';
+    }
+
+    if (!window.__lm_detailEscWired) {
+        window.__lm_detailEscWired = true;
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            const m = document.getElementById('detailModal');
+            if (m && m.classList.contains('show')) closeModal();
+        });
+    }
+}
+
+// Expose new handlers for inline onclick
+window.toggleFavorite = toggleFavorite;
+window.openNavigation = openNavigation;
+window.openDetailReview = openDetailReview;
 
 // ============================================
 // CHATBOT AI (MakanBot)
