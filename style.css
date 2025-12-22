@@ -282,19 +282,22 @@ a {
 /* ========================================
    HEADER
    ======================================== */
-.header {
+.header,
+.app-header {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: 60px;
-    background: var(--white);
+    height: var(--header-height);
+    /* Let .glass control the background when used (index.html uses .app-header.glass) */
+    background: transparent;
     box-shadow: var(--shadow-sm);
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 var(--space-4);
-    z-index: var(--z-fixed);
+    /* Must sit above Leaflet panes/controls */
+    z-index: 1200;
     padding-top: var(--safe-top);
 }
 
@@ -816,6 +819,7 @@ a {
     font-size: 1.25rem;
     z-index: var(--z-dropdown);
     transition: var(--transition-fast);
+    pointer-events: auto;
 }
 
 .map-locate-btn:hover {
@@ -4115,14 +4119,19 @@ body {
     top: 0;
     left: 0;
     width: 100%;
+    /* Use dynamic viewport height on mobile (prevents jump when address bar shows/hides) */
+    height: 100dvh !important;
     height: 100vh !important;
     z-index: 0;
+    /* Ensure the map remains interactive even when parent containers use pointer-events tricks */
+    pointer-events: auto;
 }
 
 #map {
     width: 100%;
     height: 100%;
     border-radius: 0;
+    pointer-events: auto;
 }
 
 /* Transform Home Section to Sidebar Panel */
