@@ -340,6 +340,9 @@ let state = {
     map: null,
     detailMap: null,
     detailMarker: null,
+    submissionsFilter: 'pending',
+    submissionMap: null,
+    submissionMarker: null,
     markers: [],
     weather: null
 };
@@ -350,6 +353,7 @@ let state = {
 const AdminManager = {
     toggle() {
         state.isAdmin = !state.isAdmin;
+        DB.set('adminMode', state.isAdmin);
         showToast(state.isAdmin ? "Mode Admin: ON 🔧" : "Mode Admin: OFF");
         location.reload();
     },
@@ -426,6 +430,11 @@ function loadState() {
     state.kulinerData = DB.get('kuliner', initialKulinerData);
     state.favorites = new Set(DB.get('favorites', []));
     state.currentUser = DB.get('currentUser', null);
+
+    // Admin mode can come from user role or persisted toggle
+    const adminMode = DB.get('adminMode', false);
+    const isRoleAdmin = !!(state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.email === 'admin@lapormangan.id'));
+    state.isAdmin = !!(adminMode || isRoleAdmin);
 }
 
 function initApp() {
@@ -436,6 +445,9 @@ function initApp() {
     setupEventListeners();
     updateAuthUI();
     checkUrlHash();
+
+    // Admin UI hooks
+    updateAdminUI();
 
     // Init Chatbot
     const fab = document.querySelector('.chatbot-fab') || document.querySelector('.chat-fab');
@@ -593,7 +605,405 @@ function setupEventListeners() {
 
     // Detail modal close on backdrop click + ESC
     wireDetailModalClose();
+
+    // Submissions modals close wiring
+    wireSimpleModalClose('submissionsModal', closeSubmissionsModal);
+    wireSimpleModalClose('submissionDetailModal', closeSubmissionDetail);
 }
+
+// ============================================
+// UC-19: ADMIN APPROVE/REJECT SUBMISSION
+// ============================================
+function getAllSubmissions() {
+    const list = DB.get('submissions', []);
+    return Array.isArray(list) ? list : [];
+}
+
+function getPendingCount() {
+    return getAllSubmissions().filter(s => (s && s.status === 'pending')).length;
+}
+
+function updateAdminUI() {
+    const nav = document.getElementById('reviewSubmissionsNav');
+    if (nav) nav.style.display = state.isAdmin ? '' : 'none';
+    updatePendingBadge();
+}
+
+function updatePendingBadge() {
+    const badge = document.getElementById('pendingSubmissionsBadge');
+    if (!badge) return;
+    const count = getPendingCount();
+    badge.textContent = String(count);
+    badge.style.display = (state.isAdmin && count > 0) ? '' : 'none';
+}
+
+function setSubmissionFilter(status) {
+    state.submissionsFilter = status;
+    // update tab UI
+    document.querySelectorAll('.submissions-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.status === status);
+    });
+    renderSubmissionsList();
+}
+
+function openSubmissionsModal() {
+    if (!state.isAdmin) {
+        showToast('Fitur ini khusus admin.', 'warning');
+        return;
+    }
+    const modal = document.getElementById('submissionsModal');
+    if (!modal) return;
+    modal.classList.add('show');
+
+    // default filter
+    if (!state.submissionsFilter) state.submissionsFilter = 'pending';
+    setSubmissionFilter(state.submissionsFilter);
+}
+
+function closeSubmissionsModal() {
+    const modal = document.getElementById('submissionsModal');
+    if (modal) modal.classList.remove('show');
+}
+
+function renderSubmissionsList() {
+    const listEl = document.getElementById('submissionsList');
+    const emptyEl = document.getElementById('submissionsEmpty');
+    const counterEl = document.getElementById('submissionsCounter');
+    if (!listEl || !emptyEl || !counterEl) return;
+
+    const submissions = getAllSubmissions();
+    const filtered = submissions.filter(s => (s && (s.status || 'pending') === state.submissionsFilter));
+    counterEl.textContent = `${filtered.length} item`;
+
+    if (!filtered.length) {
+        listEl.innerHTML = '';
+        emptyEl.style.display = '';
+        return;
+    }
+
+    emptyEl.style.display = 'none';
+    listEl.innerHTML = filtered.map(s => {
+        const data = s.data || {};
+        const foto = (data.fotos && data.fotos[0]) || data.foto || 'https://via.placeholder.com/200x200?text=No+Image';
+        const status = String(s.status || 'pending');
+        const submittedAt = s.submittedAt ? new Date(s.submittedAt).toLocaleString() : '-';
+
+        return `
+            <div class="submission-card">
+                <div class="submission-thumb">
+                    <img src="${escapeHtml(foto)}" alt="Foto ${escapeHtml(data.nama || 'Kuliner')}" loading="lazy" onerror="this.src='https://via.placeholder.com/200x200?text=No+Image'">
+                </div>
+                <div class="submission-main">
+                    <div class="submission-title-row">
+                        <h4 class="submission-title">${escapeHtml(data.nama || 'Tanpa Nama')}</h4>
+                        <span class="submission-status ${escapeHtml(status)}">${escapeHtml(status.toUpperCase())}</span>
+                    </div>
+                    <div class="submission-meta">
+                        <div><b>Kategori:</b> ${escapeHtml(data.kategori || '-')}</div>
+                        <div><b>Alamat:</b> ${escapeHtml(data.alamat || '-')}</div>
+                        <div><b>Submitter:</b> ${escapeHtml(s.userName || 'User')}</div>
+                        <div><b>Tanggal:</b> ${escapeHtml(submittedAt)}</div>
+                    </div>
+                    <div class="submission-actions">
+                        <button class="btn btn-primary btn-sm" onclick="openSubmissionDetail(${Number(s.id)}); return false;">
+                            <i class="fas fa-eye"></i> Detail
+                        </button>
+                        ${status === 'pending' ? `
+                            <button class="btn btn-success btn-sm" onclick="approveSubmission(${Number(s.id)}); return false;">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="rejectSubmission(${Number(s.id)}); return false;">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function openSubmissionDetail(submissionId) {
+    if (!state.isAdmin) return;
+    const submissions = getAllSubmissions();
+    const sub = submissions.find(s => Number(s.id) === Number(submissionId));
+    if (!sub) {
+        showToast('Submission tidak ditemukan.', 'error');
+        return;
+    }
+    const modal = document.getElementById('submissionDetailModal');
+    const content = document.getElementById('submissionModalContent');
+    if (!modal || !content) return;
+
+    const data = sub.data || {};
+    const photos = getItemPhotos(data);
+    const halalInfo = getHalalInfo(data.halal);
+    const status = String(sub.status || 'pending');
+    const submittedAt = sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '-';
+
+    modal.dataset.submissionId = String(sub.id);
+
+    content.innerHTML = `
+        <div class="detail-layout">
+            <div class="detail-hero">
+                <div class="detail-carousel" aria-label="Foto submission">
+                    <div class="detail-carousel-track" id="submissionCarouselTrack">
+                        ${photos.map((src, i) => `
+                            <div class="detail-carousel-slide">
+                                <img src="${escapeHtml(src)}" alt="Foto ${i + 1} ${escapeHtml(data.nama || '')}" loading="lazy" onerror="this.src='https://via.placeholder.com/800x400?text=No+Image'">
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    ${photos.length > 1 ? `
+                        <button type="button" class="carousel-btn prev" id="submissionCarouselPrev" aria-label="Foto sebelumnya">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button type="button" class="carousel-btn next" id="submissionCarouselNext" aria-label="Foto berikutnya">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <div class="carousel-dots" id="submissionCarouselDots" aria-label="Indikator foto">
+                            ${photos.map((_, i) => `<button type="button" class="carousel-dot" data-index="${i}" aria-label="Foto ${i + 1}"></button>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <div class="detail-body">
+                <div class="detail-title-row">
+                    <h2 class="detail-title">${escapeHtml(data.nama || 'Tanpa Nama')}</h2>
+                    <span class="detail-badge">${escapeHtml(data.kategori || '-')}</span>
+                </div>
+
+                <div class="detail-meta">
+                    <span class="detail-chip ${escapeHtml(status)}">${escapeHtml(status.toUpperCase())}</span>
+                    <span class="detail-chip halal">${escapeHtml(halalInfo.label)}</span>
+                    <span class="detail-chip">Submitter: ${escapeHtml(sub.userName || 'User')}</span>
+                    <span class="detail-chip">${escapeHtml(submittedAt)}</span>
+                </div>
+
+                <div class="detail-info">
+                    <div class="detail-info-row"><i class="fas fa-map-marker-alt"></i><span>${escapeHtml(data.alamat || '-')}</span></div>
+                    <div class="detail-info-grid">
+                        <div class="detail-info-card"><small>Jam Operasional</small><div><b>${escapeHtml(data.jam || '-')}</b></div></div>
+                        <div class="detail-info-card"><small>Harga</small><div><b>${escapeHtml(data.harga || '-')}</b></div></div>
+                        <div class="detail-info-card"><small>Kontak</small><div><b>${escapeHtml(data.kontak || '-')}</b></div></div>
+                        <div class="detail-info-card"><small>Parkir</small><div><b>${escapeHtml(data.parkir || '-')}</b></div></div>
+                        <div class="detail-info-card"><small>Tipe</small><div><b>${data.keliling ? 'Keliling' : 'Tetap'}</b></div></div>
+                        <div class="detail-info-card"><small>Status Halal</small><div><b>${escapeHtml(halalInfo.text)}</b></div></div>
+                    </div>
+                </div>
+
+                <div class="detail-mini-map-wrap" aria-label="Peta lokasi">
+                    <div id="submissionMiniMap" class="detail-mini-map"></div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>Deskripsi</h3>
+                    <p>${escapeHtml(data.deskripsi || '-')}</p>
+                </div>
+            </div>
+
+            <div class="detail-footer-actions" role="group" aria-label="Aksi submission">
+                <button type="button" class="detail-action" onclick="closeSubmissionDetail(); return false;" aria-label="Tutup">
+                    <i class="fas fa-times"></i>
+                    <span>Tutup</span>
+                </button>
+                <button type="button" class="detail-action primary" onclick="openNavigation(${Number(data.lat)}, ${Number(data.lng)}); return false;" aria-label="Navigasi">
+                    <i class="fas fa-directions"></i>
+                    <span>Navigasi</span>
+                </button>
+                ${status === 'pending' ? `
+                    <button type="button" class="detail-action" onclick="rejectSubmission(${Number(sub.id)}); return false;" aria-label="Reject">
+                        <i class="fas fa-times"></i>
+                        <span>Reject</span>
+                    </button>
+                    <button type="button" class="detail-action primary" onclick="approveSubmission(${Number(sub.id)}); return false;" aria-label="Approve">
+                        <i class="fas fa-check"></i>
+                        <span>Approve</span>
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    modal.classList.add('show');
+    initSubmissionCarousel();
+    setTimeout(() => initSubmissionMiniMap(data), 50);
+}
+
+function closeSubmissionDetail() {
+    const modal = document.getElementById('submissionDetailModal');
+    if (modal) modal.classList.remove('show');
+    if (state.submissionMap) {
+        try { state.submissionMap.remove(); } catch { /* ignore */ }
+        state.submissionMap = null;
+        state.submissionMarker = null;
+    }
+}
+
+function initSubmissionCarousel() {
+    const track = document.getElementById('submissionCarouselTrack');
+    if (!track) return;
+    const slides = Array.from(track.children || []);
+    const total = slides.length;
+    let index = 0;
+
+    const dotsWrap = document.getElementById('submissionCarouselDots');
+    const dots = dotsWrap ? Array.from(dotsWrap.querySelectorAll('.carousel-dot')) : [];
+    const prevBtn = document.getElementById('submissionCarouselPrev');
+    const nextBtn = document.getElementById('submissionCarouselNext');
+
+    const setIndex = (i) => {
+        if (!total) return;
+        index = ((i % total) + total) % total;
+        track.style.transform = `translateX(-${index * 100}%)`;
+        dots.forEach((d, di) => d.classList.toggle('active', di === index));
+    };
+
+    setIndex(0);
+    if (prevBtn) prevBtn.onclick = () => setIndex(index - 1);
+    if (nextBtn) nextBtn.onclick = () => setIndex(index + 1);
+    dots.forEach((d) => { d.onclick = () => setIndex(Number(d.dataset.index || '0')); });
+}
+
+function initSubmissionMiniMap(data) {
+    if (typeof L === 'undefined') return;
+    const el = document.getElementById('submissionMiniMap');
+    if (!el) return;
+
+    if (state.submissionMap) {
+        try { state.submissionMap.remove(); } catch { /* ignore */ }
+        state.submissionMap = null;
+        state.submissionMarker = null;
+    }
+
+    const lat = Number(data?.lat);
+    const lng = Number(data?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    state.submissionMap = L.map(el, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: true,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false
+    }).setView([lat, lng], 16);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(state.submissionMap);
+
+    state.submissionMarker = L.marker([lat, lng]).addTo(state.submissionMap);
+    try { state.submissionMap.invalidateSize(); } catch { /* ignore */ }
+}
+
+function approveSubmission(submissionId) {
+    if (!state.isAdmin) return;
+    const submissions = getAllSubmissions();
+    const idx = submissions.findIndex(s => Number(s.id) === Number(submissionId));
+    if (idx === -1) {
+        showToast('Submission tidak ditemukan.', 'error');
+        return;
+    }
+    const sub = submissions[idx];
+    if ((sub.status || 'pending') !== 'pending') {
+        showToast('Submission ini sudah diproses.', 'info');
+        return;
+    }
+
+    const data = sub.data || {};
+    const maxId = Math.max(0, ...state.kulinerData.map(k => Number(k.id) || 0));
+    const newItem = {
+        id: maxId + 1,
+        ...data,
+        verified: true,
+        reviews: Array.isArray(data.reviews) ? data.reviews : []
+    };
+
+    state.kulinerData.unshift(newItem);
+    DB.set('kuliner', state.kulinerData);
+
+    submissions[idx] = {
+        ...sub,
+        status: 'approved',
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: state.currentUser?.id ?? null
+    };
+    DB.set('submissions', submissions);
+
+    showToast('Submission disetujui! Kuliner baru telah ditambahkan ✅');
+    trySendAdminNotification('Submission disetujui', `${newItem.nama} telah ditambahkan.`);
+
+    renderKulinerList();
+    renderMarkers();
+    updatePendingBadge();
+    renderSubmissionsList();
+    closeSubmissionDetail();
+}
+
+function rejectSubmission(submissionId) {
+    if (!state.isAdmin) return;
+    const submissions = getAllSubmissions();
+    const idx = submissions.findIndex(s => Number(s.id) === Number(submissionId));
+    if (idx === -1) {
+        showToast('Submission tidak ditemukan.', 'error');
+        return;
+    }
+    const sub = submissions[idx];
+    if ((sub.status || 'pending') !== 'pending') {
+        showToast('Submission ini sudah diproses.', 'info');
+        return;
+    }
+    const reason = prompt('Alasan reject (opsional):', '') || '';
+
+    submissions[idx] = {
+        ...sub,
+        status: 'rejected',
+        rejectReason: reason.trim(),
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: state.currentUser?.id ?? null
+    };
+    DB.set('submissions', submissions);
+
+    showToast('Submission ditolak.');
+    updatePendingBadge();
+    renderSubmissionsList();
+    closeSubmissionDetail();
+}
+
+function trySendAdminNotification(title, body) {
+    try {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') {
+            // eslint-disable-next-line no-new
+            new Notification(title, { body });
+        }
+    } catch {
+        // ignore
+    }
+}
+
+function wireSimpleModalClose(modalId, onClose) {
+    const modal = document.getElementById(modalId);
+    if (modal && !modal.dataset.backdropWired) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) onClose();
+        });
+        modal.dataset.backdropWired = 'true';
+    }
+}
+
+// Expose handlers (inline onclick)
+window.openSubmissionsModal = openSubmissionsModal;
+window.closeSubmissionsModal = closeSubmissionsModal;
+window.setSubmissionFilter = setSubmissionFilter;
+window.openSubmissionDetail = openSubmissionDetail;
+window.closeSubmissionDetail = closeSubmissionDetail;
+window.approveSubmission = approveSubmission;
+window.rejectSubmission = rejectSubmission;
 
 function applyFilters() {
     const search = document.getElementById('searchInput')?.value?.toLowerCase() || '';

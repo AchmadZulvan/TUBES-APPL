@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="style.css?v=10">
 </head>
 
 <body>
@@ -162,6 +162,13 @@
             </a>
 
             <div class="sidebar-divider" style="height:1px; background:#eee; margin:10px 0;"></div>
+
+            <!-- Admin only: Review submissions -->
+            <a href="#" class="nav-item" id="reviewSubmissionsNav" style="display:none;" onclick="openSubmissionsModal(); return false;">
+                <i class="fas fa-clipboard-check"></i>
+                <span>Review Submission</span>
+                <span class="nav-badge" id="pendingSubmissionsBadge" style="display:none;">0</span>
+            </a>
 
             <a href="#" class="nav-item" onclick="showAddKulinerModal(); return false;">
                 <i class="fas fa-plus-circle"></i>
@@ -346,6 +353,40 @@
                 <i class="fas fa-times"></i>
             </button>
             <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <!-- Admin: Submissions List Modal (UC-19) -->
+    <div class="modal" id="submissionsModal">
+        <div class="modal-content submissions-modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-check"></i> Review Submission</h2>
+                <button class="modal-close" onclick="closeSubmissionsModal()" aria-label="Tutup">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="submissions-toolbar">
+                    <div class="submissions-tabs" role="tablist" aria-label="Filter submission">
+                        <button type="button" class="submissions-tab active" data-status="pending" onclick="setSubmissionFilter('pending')">Pending</button>
+                        <button type="button" class="submissions-tab" data-status="approved" onclick="setSubmissionFilter('approved')">Approved</button>
+                        <button type="button" class="submissions-tab" data-status="rejected" onclick="setSubmissionFilter('rejected')">Rejected</button>
+                    </div>
+                    <div class="submissions-counter" id="submissionsCounter">0 item</div>
+                </div>
+                <div id="submissionsList" class="submissions-list"></div>
+                <div id="submissionsEmpty" class="detail-empty" style="display:none;">Tidak ada submission.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin: Submission Detail Modal -->
+    <div class="modal detail-modal" id="submissionDetailModal">
+        <div class="modal-content detail-content">
+            <button class="modal-close" onclick="closeSubmissionDetail()" aria-label="Tutup">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="submissionModalContent"></div>
         </div>
     </div>
 
@@ -629,7 +670,7 @@
 
 
 
-    <script src="script.js?v=9"></script>
+    <script src="script.js?v=10"></script>
 
     <!-- Check Login Status -->
     <script>
@@ -715,7 +756,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 // Versioned URL to ensure updates propagate (helps when an old cached index.html is stuck)
-                const swUrl = 'sw.js?v=1.0.3';
+                const swUrl = 'sw.js?v=1.0.4';
 
                 navigator.serviceWorker.register(swUrl)
                     .then((reg) => {
