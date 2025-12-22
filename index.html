@@ -714,9 +714,25 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('Service Worker registered'))
-                    .catch(err => console.log('Service Worker registration failed:', err));
+                // Versioned URL to ensure updates propagate (helps when an old cached index.html is stuck)
+                const swUrl = 'sw.js?v=1.0.1';
+
+                navigator.serviceWorker.register(swUrl)
+                    .then((reg) => {
+                        // Ask browser to check for an update now
+                        try { reg.update(); } catch { /* ignore */ }
+                        console.log('Service Worker registered');
+                    })
+                    .catch((err) => console.log('Service Worker registration failed:', err));
+
+                // Reload once when the new service worker takes control
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    try {
+                        if (sessionStorage.getItem('swReloadedOnce') === '1') return;
+                        sessionStorage.setItem('swReloadedOnce', '1');
+                    } catch { /* ignore */ }
+                    window.location.reload();
+                });
             });
         }
     </script>

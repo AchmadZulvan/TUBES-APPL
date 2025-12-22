@@ -1,19 +1,25 @@
 // Service Worker untuk Lapor Mangan! PWA
-// Versi: 1.0.0
+// NOTE: Project ini berjalan di GitHub Pages (sub-path), jadi semua URL asset
+// harus disusun berdasarkan scope service worker agar cache tidak salah alamat.
 
-const CACHE_NAME = 'lapor-mangan-v1.0.0';
-const OFFLINE_URL = '/offline.html';
+const SW_VERSION = '1.0.1';
+const CACHE_NAME = `lapor-mangan-v${SW_VERSION}`;
+
+const SCOPE_BASE = new URL(self.registration.scope);
+const scopedUrl = (path) => new URL(String(path || '').replace(/^\//, ''), SCOPE_BASE).toString();
+
+const OFFLINE_URL = scopedUrl('offline.html');
 
 // File yang akan di-cache untuk offline access
 const ASSETS_TO_CACHE = [
-    '/',
-    '/index.html',
-    '/style.css',
-    '/script.js',
-    '/chatbot.js',
-    '/knowledge-base.js',
-    '/manifest.json',
-    '/offline.html',
+    scopedUrl(''),
+    scopedUrl('index.html'),
+    scopedUrl('style.css'),
+    scopedUrl('script.js'),
+    scopedUrl('chatbot.js'),
+    scopedUrl('knowledge-base.js'),
+    scopedUrl('manifest.json'),
+    OFFLINE_URL,
     // External resources
     'https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
@@ -69,28 +75,51 @@ self.addEventListener('fetch', (event) => {
     
     // Skip chrome-extension and other non-http requests
     if (!event.request.url.startsWith('http')) return;
+
+    const request = event.request;
+    const isNavigation = request.mode === 'navigate' || request.destination === 'document';
+
+    // Network-first untuk dokumen (HTML) agar perubahan UI (mis. tombol +) tidak "nyangkut" di cache.
+    if (isNavigation) {
+        event.respondWith(
+            (async () => {
+                try {
+                    const response = await fetch(request);
+                    if (response && response.status === 200) {
+                        const cache = await caches.open(CACHE_NAME);
+                        cache.put(request, response.clone());
+                    }
+                    return response;
+                } catch {
+                    const cached = await caches.match(request);
+                    return cached || caches.match(OFFLINE_URL);
+                }
+            })()
+        );
+        return;
+    }
     
     event.respondWith(
-        caches.match(event.request)
+        caches.match(request)
             .then((cachedResponse) => {
                 // Return cached version if available
                 if (cachedResponse) {
                     // Fetch updated version in background
-                    fetchAndUpdate(event.request);
+                    fetchAndUpdate(request);
                     return cachedResponse;
                 }
                 
                 // Otherwise fetch from network
-                return fetchAndCache(event.request);
+                return fetchAndCache(request);
             })
             .catch(() => {
                 // If both cache and network fail, show offline page
-                if (event.request.mode === 'navigate') {
+                if (request.mode === 'navigate') {
                     return caches.match(OFFLINE_URL);
                 }
                 
                 // For images, return placeholder
-                if (event.request.destination === 'image') {
+                if (request.destination === 'image') {
                     return new Response(
                         '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><text x="50%" y="50%" text-anchor="middle" fill="#999">Offline</text></svg>',
                         { headers: { 'Content-Type': 'image/svg+xml' } }
