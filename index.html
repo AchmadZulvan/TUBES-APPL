@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="style.css?v=8">
+    <link rel="stylesheet" href="style.css?v=9">
 </head>
 
 <body>
@@ -629,7 +629,7 @@
 
 
 
-    <script src="script.js?v=8"></script>
+    <script src="script.js?v=9"></script>
 
     <!-- Check Login Status -->
     <script>
@@ -715,7 +715,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 // Versioned URL to ensure updates propagate (helps when an old cached index.html is stuck)
-                const swUrl = 'sw.js?v=1.0.2';
+                const swUrl = 'sw.js?v=1.0.3';
 
                 navigator.serviceWorker.register(swUrl)
                     .then((reg) => {

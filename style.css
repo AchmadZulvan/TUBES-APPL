@@ -1335,7 +1335,10 @@ a {
 
 .detail-content {
     padding: 0;
-    overflow: hidden;
+    /* Keep the modal scrollable (do NOT override .modal-content overflow-y:auto) */
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .detail-content h3 {
@@ -1690,8 +1693,9 @@ a {
 
 .detail-review-list {
     margin-top: var(--space-4);
-    max-height: 220px;
-    overflow-y: auto;
+    /* Avoid nested scroll areas that trap scrolling on mobile */
+    max-height: none;
+    overflow: visible;
     border-radius: var(--radius-xl);
     border: 1px solid var(--gray-200);
     background: var(--white);
