@@ -433,8 +433,54 @@ function loadState() {
 
     // Admin mode can come from user role or persisted toggle
     const adminMode = DB.get('adminMode', false);
-    const isRoleAdmin = !!(state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.email === 'admin@lapormangan.id'));
+    const role = String(state.currentUser?.role ?? '').toLowerCase().trim();
+    const email = String(state.currentUser?.email ?? '').toLowerCase().trim();
+    const isRoleAdmin = !!(
+        state.currentUser && (
+            role === 'admin' ||
+            email === 'admin@lapormangan.id' ||
+            state.currentUser?.isAdmin === true
+        )
+    );
     state.isAdmin = !!(adminMode || isRoleAdmin);
+}
+
+// Some parts of the UI call updateAuthUI(); older versions of this repo had it in another file.
+// If it's missing, initApp() will throw and admin-only UI (like Review Submission) won't render.
+function updateAuthUI() {
+    try {
+        const raw = localStorage.getItem('lm_currentUser');
+        if (!raw) return;
+        const user = JSON.parse(raw);
+
+        // Keep state in sync (defensive)
+        state.currentUser = user;
+        const role = String(user?.role ?? '').toLowerCase().trim();
+        const email = String(user?.email ?? '').toLowerCase().trim();
+        const isRoleAdmin = role === 'admin' || email === 'admin@lapormangan.id' || user?.isAdmin === true;
+        if (isRoleAdmin) state.isAdmin = true;
+
+        // Update header/sidebar buttons if present (index.html uses these IDs)
+        const loginBtn = document.getElementById('loginHeaderBtn');
+        const sidebarAuthBtn = document.getElementById('authBtnSidebar');
+
+        if (loginBtn) {
+            const firstName = String(user?.name ?? 'User').split(' ')[0] || 'User';
+            loginBtn.innerHTML = `
+                <i class="fas fa-user-circle"></i>
+                <span>${escapeHtml(firstName)}</span>
+            `;
+        }
+
+        if (sidebarAuthBtn) {
+            sidebarAuthBtn.innerHTML = `
+                <i class="fas fa-user-circle"></i>
+                <span>${escapeHtml(String(user?.name ?? 'User'))}</span>
+            `;
+        }
+    } catch {
+        // never block app init
+    }
 }
 
 function initApp() {
