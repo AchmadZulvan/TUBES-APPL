@@ -296,8 +296,10 @@ a {
     align-items: center;
     justify-content: space-between;
     padding: 0 var(--space-4);
-    /* Must sit above Leaflet panes/controls */
-    z-index: 1200;
+    /* Must sit above Leaflet panes/controls and any fixed overlays */
+    z-index: 20000;
+    pointer-events: auto;
+    isolation: isolate;
     padding-top: var(--safe-top);
 }
 

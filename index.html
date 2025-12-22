@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 
 <body>
@@ -34,11 +34,17 @@
     <!-- Header (Main App Header) -->
     <header class="app-header glass">
         <div class="header-left">
+            <button class="menu-btn" onclick="toggleSidebar()" aria-label="Buka menu">
+                <i class="fas fa-bars"></i>
+            </button>
             <div class="logo">
                 <h1>Lapor Mangan!</h1>
             </div>
         </div>
         <div class="header-right">
+            <button class="add-btn" onclick="showAddKulinerModal(); return false;" aria-label="Tambah Kuliner" title="Tambah Kuliner">
+                <i class="fas fa-plus"></i>
+            </button>
             <div class="weather-widget" onclick="toggleWeatherDetails()">
                 <i class="fas fa-cloud-sun" id="weatherIcon"></i>
                 <span id="weatherTemp">--°C</span>
@@ -390,13 +396,19 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="add-foto"><i class="fas fa-image"></i> URL Foto</label>
-                            <input type="url" id="add-foto" placeholder="https://example.com/foto.jpg">
+                            <label for="add-foto-files"><i class="fas fa-image"></i> Upload Foto (maks 3)</label>
+                            <input type="file" id="add-foto-files" accept="image/*" multiple>
+                            <small style="display:block; margin-top:6px; color:#666;">Maks 3 foto, masing-masing maks 2MB.</small>
                         </div>
                         <div class="form-group">
                             <label for="add-kontak"><i class="fas fa-phone"></i> Nomor Kontak</label>
                             <input type="tel" id="add-kontak" placeholder="08123456789">
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="add-foto"><i class="fas fa-link"></i> URL Foto (opsional)</label>
+                        <input type="url" id="add-foto" placeholder="https://example.com/foto.jpg">
                     </div>
 
                     <div class="form-row">
@@ -408,6 +420,12 @@
                             <label for="add-lng"><i class="fas fa-map-pin"></i> Longitude *</label>
                             <input type="number" step="any" id="add-lng" placeholder="109.2422" required>
                         </div>
+                    </div>
+
+                    <div class="form-actions" style="justify-content:flex-start; gap:10px; margin-top:0;">
+                        <button type="button" class="btn btn-secondary" id="getCoordsBtn">
+                            <i class="fas fa-location-crosshairs"></i> Dapatkan Koordinat
+                        </button>
                     </div>
 
                     <div class="form-row">
@@ -611,7 +629,7 @@
 
 
 
-    <script src="script.js?v=6"></script>
+    <script src="script.js?v=7"></script>
 
     <!-- Check Login Status -->
     <script>

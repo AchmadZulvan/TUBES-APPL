@@ -1034,76 +1034,322 @@ function showToast(msg, type = 'info') {
     setTimeout(() => div.remove(), 3000);
 }
 
+function escapeHtml(str) {
+    return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function normalizeTimeRange(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return { ok: true, value: '' };
+
+    // Accept: 08:00 - 20:00, 08:00-20:00, 8:00 - 20:00
+    const m = raw.match(/^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$/);
+    if (!m) return { ok: false, error: "Format jam harus seperti '08:00 - 20:00'" };
+    const h1 = Number(m[1]);
+    const min1 = Number(m[2]);
+    const h2 = Number(m[3]);
+    const min2 = Number(m[4]);
+    const valid = (h) => Number.isInteger(h) && h >= 0 && h <= 23;
+    const validMin = (mm) => Number.isInteger(mm) && mm >= 0 && mm <= 59;
+    if (!valid(h1) || !valid(h2) || !validMin(min1) || !validMin(min2)) {
+        return { ok: false, error: "Jam operasional tidak valid" };
+    }
+    const pad2 = (n) => String(n).padStart(2, '0');
+    return { ok: true, value: `${pad2(h1)}:${pad2(min1)} - ${pad2(h2)}:${pad2(min2)}` };
+}
+
+function validatePriceInput(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return { ok: false, error: 'Rentang harga wajib diisi' };
+    // Require at least a digit; allow common formats e.g. Rp15.000 - Rp30.000 / 15000-30000
+    if (!/\d/.test(raw)) return { ok: false, error: 'Rentang harga harus mengandung angka' };
+    // If there's a dash, require digits on both sides
+    if (raw.includes('-')) {
+        const parts = raw.split('-').map(s => s.trim());
+        if (parts.length < 2 || !/\d/.test(parts[0]) || !/\d/.test(parts[1])) {
+            return { ok: false, error: "Format harga tidak valid. Contoh: 'Rp15.000 - Rp30.000'" };
+        }
+    }
+    return { ok: true, value: raw };
+}
+
+async function filesToDataUrls(files) {
+    const list = Array.from(files || []);
+    const results = [];
+    for (const f of list) {
+        // eslint-disable-next-line no-await-in-loop
+        const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(new Error('Gagal membaca file foto'));
+            reader.readAsDataURL(f);
+        });
+        results.push(dataUrl);
+    }
+    return results;
+}
+
 // ============================================
 // FORM HANDLING (Add & Edit)
 // ============================================
 function showSubmitForm(editId = null) {
+    // UC-17 precondition: user sudah login
+    if (!state.currentUser && !state.isAdmin) {
+        showToast('Silakan login terlebih dulu untuk menambah kuliner.', 'warning');
+        // Redirect to login page (existing flow)
+        window.location.href = 'login.html';
+        return;
+    }
+
     const modal = document.getElementById('submitModal');
-    modal.classList.add('show');
     const form = document.getElementById('addKulinerForm');
+    if (!modal || !form) return;
+
+    // Ensure kategori dropdown populated
+    const kategoriSelect = document.getElementById('add-kategori');
+    if (kategoriSelect && (!kategoriSelect.options || kategoriSelect.options.length <= 1)) {
+        const categories = ["Soto", "Sate", "Bakso", "Gudeg", "Ayam", "Lontong", "Jajanan Tradisional", "Makanan Berat", "Minuman"];
+        kategoriSelect.innerHTML = '<option value="">Pilih Kategori</option>';
+        categories.forEach(cat => {
+            kategoriSelect.innerHTML += `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`;
+        });
+    }
 
     // Reset or Populate
     if (editId) {
         const item = state.kulinerData.find(k => k.id === editId);
         if (item) {
-            form.dataset.editId = editId;
-            document.getElementById('inputNama').value = item.nama;
-            document.getElementById('inputKategori').value = item.kategori;
-            document.getElementById('inputHarga').value = item.harga;
-            // Assuming input IDs match these variables
-            if (document.getElementById('inputPukul')) document.getElementById('inputPukul').value = item.jam;
-            if (document.getElementById('inputAlamat')) document.getElementById('inputAlamat').value = item.alamat;
-            if (document.getElementById('inputFoto')) document.getElementById('inputFoto').value = item.foto;
+            form.dataset.editId = String(editId);
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.value = val ?? '';
+            };
+            setVal('add-nama', item.nama);
+            setVal('add-kategori', item.kategori);
+            setVal('add-alamat', item.alamat);
+            setVal('add-jam', item.jam);
+            setVal('add-harga', item.harga);
+            setVal('add-deskripsi', item.deskripsi);
+            setVal('add-foto', item.foto);
+            setVal('add-kontak', item.kontak);
+            setVal('add-lat', item.lat);
+            setVal('add-lng', item.lng);
+            setVal('add-tipe', String(!!item.keliling));
+            setVal('add-halal', item.halal || 'unknown');
+            setVal('add-parkir', item.parkir || '');
         }
     } else {
         delete form.dataset.editId;
-        if (form) form.reset();
+        form.reset();
+        // keep coords empty; user can fill manually or via button
+    }
+
+    modal.classList.add('show');
+}
+
+function closeSubmitModal() {
+    const modal = document.getElementById('submitModal');
+    const form = document.getElementById('addKulinerForm');
+    if (modal) modal.classList.remove('show');
+    if (form) {
+        delete form.dataset.editId;
+        form.reset();
+        const fileInput = document.getElementById('add-foto-files');
+        if (fileInput) fileInput.value = '';
     }
 }
 
-function submitKuliner(e) {
+async function getCoordsForAddForm() {
+    if (!navigator.geolocation) {
+        showToast('Geolocation tidak didukung', 'error');
+        return;
+    }
+    showToast('Mengambil koordinat...', 'info');
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            const latEl = document.getElementById('add-lat');
+            const lngEl = document.getElementById('add-lng');
+            if (latEl) latEl.value = Number(pos.coords.latitude).toFixed(6);
+            if (lngEl) lngEl.value = Number(pos.coords.longitude).toFixed(6);
+            showToast('Koordinat berhasil diisi ✅');
+        },
+        () => showToast('Gagal mengambil lokasi. Pastikan izin lokasi diaktifkan.', 'error'),
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+
+async function submitKuliner(e) {
     e.preventDefault();
     const form = e.target;
-    // Collect Data
-    const nama = document.getElementById('inputNama').value;
-    const kategori = document.getElementById('inputKategori').value;
-    const harga = document.getElementById('inputHarga').value;
-    const jam = document.getElementById('inputPukul')?.value || "08:00 - 21:00";
-    const alamat = document.getElementById('inputAlamat')?.value || "Purwokerto";
-    const foto = document.getElementById('inputFoto')?.value || 'https://via.placeholder.com/400x200?text=No+Image';
+    if (!form) return;
 
-    // Simple Validation
-    if (!nama || !kategori) return showToast("Nama dan Kategori wajib diisi!", "error");
-
-    const newData = {
-        id: form.dataset.editId ? parseInt(form.dataset.editId) : Date.now(),
-        nama, kategori, alamat, jam, harga,
-        foto,
-        lat: -7.421 + (Math.random() * 0.01 - 0.005), // Random nearby coord
-        lng: 109.242 + (Math.random() * 0.01 - 0.005),
-        keliling: false,
-        halal: "halal",
-        verified: !!state.isAdmin, // Auto verify if admin adds
-        reviews: []
-    };
-
-    if (form.dataset.editId) {
-        // Edit Mode
-        const index = state.kulinerData.findIndex(k => k.id === newData.id);
-        if (index !== -1) {
-            state.kulinerData[index] = { ...state.kulinerData[index], ...newData };
-            showToast("Data berhasil diperbarui! ✨");
-        }
-    } else {
-        // Add Mode
-        state.kulinerData.unshift(newData);
-        showToast("Kuliner berhasil ditambahkan! 🍔");
+    // UC-17: user harus login (kecuali admin mode)
+    if (!state.currentUser && !state.isAdmin) {
+        showToast('Silakan login terlebih dulu untuk mengirim submission.', 'warning');
+        window.location.href = 'login.html';
+        return;
     }
 
-    DB.set('kuliner', state.kulinerData);
-    renderKulinerList();
-    renderMarkers();
+    const getVal = (id) => (document.getElementById(id)?.value ?? '').toString().trim();
+
+    const nama = getVal('add-nama');
+    const kategori = getVal('add-kategori');
+    const alamat = getVal('add-alamat');
+    const jamRaw = getVal('add-jam');
+    const hargaRaw = getVal('add-harga');
+    const deskripsi = getVal('add-deskripsi');
+    const fotoUrl = getVal('add-foto');
+    const kontak = getVal('add-kontak');
+    const latStr = getVal('add-lat');
+    const lngStr = getVal('add-lng');
+    const keliling = getVal('add-tipe') === 'true';
+    const halal = getVal('add-halal') || 'unknown';
+    const parkir = getVal('add-parkir');
+
+    // Validasi UC-17
+    if (!nama || nama.length < 3) {
+        showToast('Nama tempat wajib diisi (min 3 karakter).', 'error');
+        return;
+    }
+    if (!kategori) {
+        showToast('Kategori wajib dipilih.', 'error');
+        return;
+    }
+    if (!alamat) {
+        showToast('Alamat wajib diisi.', 'error');
+        return;
+    }
+    const hargaCheck = validatePriceInput(hargaRaw);
+    if (!hargaCheck.ok) {
+        showToast(hargaCheck.error, 'error');
+        return;
+    }
+    if (!deskripsi || deskripsi.length < 20) {
+        showToast('Deskripsi wajib diisi (min 20 karakter).', 'error');
+        return;
+    }
+    const jamCheck = normalizeTimeRange(jamRaw);
+    if (!jamCheck.ok) {
+        showToast(jamCheck.error, 'error');
+        return;
+    }
+    const lat = Number(latStr);
+    const lng = Number(lngStr);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        showToast('Latitude & Longitude wajib diisi dengan angka yang valid.', 'error');
+        return;
+    }
+
+    // Foto: max 3 file, max 2MB/file
+    const fileInput = document.getElementById('add-foto-files');
+    const files = fileInput ? Array.from(fileInput.files || []) : [];
+    if (files.length > 3) {
+        showToast('Maksimal 3 foto.', 'error');
+        return;
+    }
+    const maxBytes = 2 * 1024 * 1024;
+    for (const f of files) {
+        if (f.size > maxBytes) {
+            showToast(`Foto "${f.name}" melebihi 2MB.`, 'error');
+            return;
+        }
+    }
+
+    let uploadedFotos = [];
+    try {
+        if (files.length) uploadedFotos = await filesToDataUrls(files);
+    } catch {
+        showToast('Gagal memproses foto. Coba lagi atau gunakan URL foto.', 'error');
+        return;
+    }
+
+    const primaryFoto = uploadedFotos[0] || fotoUrl || 'https://via.placeholder.com/400x200?text=No+Image';
+
+    const now = Date.now();
+    const editId = form.dataset.editId ? Number(form.dataset.editId) : null;
+
+    // Jika edit (admin), update langsung kuliner
+    if (editId) {
+        const index = state.kulinerData.findIndex(k => k.id === editId);
+        if (index === -1) {
+            showToast('Data yang ingin diedit tidak ditemukan.', 'error');
+            return;
+        }
+        state.kulinerData[index] = {
+            ...state.kulinerData[index],
+            nama,
+            kategori,
+            alamat,
+            jam: jamCheck.value || state.kulinerData[index].jam,
+            harga: hargaCheck.value,
+            deskripsi,
+            foto: primaryFoto,
+            fotos: uploadedFotos.length ? uploadedFotos : (state.kulinerData[index].fotos || []),
+            lat,
+            lng,
+            keliling,
+            halal,
+            kontak,
+            parkir
+        };
+        DB.set('kuliner', state.kulinerData);
+        renderKulinerList();
+        renderMarkers();
+        showToast('Data kuliner berhasil diperbarui! ✨');
+        closeSubmitModal();
+        return;
+    }
+
+    // Jika tambah (user), simpan sebagai submission pending
+    const submissions = DB.get('submissions', []);
+    const submission = {
+        id: now, // timestamp-based
+        status: 'pending',
+        submittedAt: new Date().toISOString(),
+        userId: state.currentUser?.id ?? null,
+        userName: state.currentUser?.name ?? 'User',
+        data: {
+            nama,
+            kategori,
+            alamat,
+            jam: jamCheck.value || '08:00 - 20:00',
+            harga: hargaCheck.value,
+            deskripsi,
+            foto: primaryFoto,
+            fotos: uploadedFotos,
+            lat,
+            lng,
+            keliling,
+            halal,
+            kontak,
+            parkir,
+            verified: false,
+            reviews: []
+        }
+    };
+    submissions.unshift(submission);
+    DB.set('submissions', submissions);
+
+    showToast('Terima kasih! Submission Anda akan direview oleh admin dalam 1-3 hari kerja. ✅');
     closeSubmitModal();
+}
+
+function wireAddKulinerForm() {
+    const form = document.getElementById('addKulinerForm');
+    if (form && !form.dataset.wired) {
+        form.addEventListener('submit', submitKuliner);
+        form.dataset.wired = 'true';
+    }
+    const btn = document.getElementById('getCoordsBtn');
+    if (btn && !btn.dataset.wired) {
+        btn.addEventListener('click', getCoordsForAddForm);
+        btn.dataset.wired = 'true';
+    }
 }
 
 function loginWithGoogle() {
@@ -1204,8 +1450,11 @@ window.showAddKulinerModal = showSubmitForm;
 window.toggleSidebar = () => {
     const sb = document.getElementById('sidebar');
     const ov = document.getElementById('sidebarOverlay');
-    if (sb) sb.classList.toggle('active');
-    if (ov) ov.classList.toggle('active');
+    const willOpen = sb ? !sb.classList.contains('open') : false;
+
+    if (sb) sb.classList.toggle('open', willOpen);
+    if (ov) ov.classList.toggle('show', willOpen);
+    document.body.classList.toggle('sidebar-open', willOpen);
 };
 window.toggleAdvancedFilters = () => {
     const el = document.getElementById('advancedFilters');
@@ -1223,5 +1472,5 @@ window.toggleAdvancedFilters = () => {
 
 window.showPrivacyPolicy = () => alert("Kebijakan Privasi:\nData disimpan lokal di browser Anda. Kami menjamin keamanan data pengguna.");
 
-// Initialize App
-document.addEventListener('DOMContentLoaded', initApp);
+// Wire form (idempotent) on load
+document.addEventListener('DOMContentLoaded', wireAddKulinerForm);
