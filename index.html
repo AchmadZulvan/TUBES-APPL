@@ -677,7 +677,7 @@
 
 
 
-    <script src="script.js?v=12"></script>
+    <script src="script.js?v=13"></script>
 
     <!-- Check Login Status -->
     <script>
@@ -763,7 +763,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 // Versioned URL to ensure updates propagate (helps when an old cached index.html is stuck)
-                const swUrl = 'sw.js?v=1.0.4';
+                const swUrl = 'sw.js?v=1.0.5';
 
                 navigator.serviceWorker.register(swUrl)
                     .then((reg) => {

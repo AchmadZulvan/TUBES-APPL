@@ -723,7 +723,65 @@ function updateAdminUI() {
     const dd = document.getElementById('reviewSubmissionsDropdown');
     if (dd) dd.style.display = state.isAdmin ? '' : 'none';
 
+    // If the HTML is stale/cached and the dropdown item doesn't exist yet, inject it.
+    // This prevents "admin but no Review Submission" issues caused by old cached index.html.
+    ensureAdminReviewSubmissionLinks();
+
     updatePendingBadge();
+}
+
+function ensureAdminReviewSubmissionLinks() {
+    if (!state.isAdmin) return;
+
+    // --- User dropdown ---
+    const dropdown = document.getElementById('userDropdownMenu');
+    if (dropdown && !document.getElementById('reviewSubmissionsDropdown')) {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.className = 'dropdown-item';
+        link.id = 'reviewSubmissionsDropdown';
+        link.onclick = (e) => {
+            e.preventDefault();
+            openSubmissionsFromDropdown();
+        };
+        link.innerHTML = `
+            <i class="fas fa-clipboard-check"></i>
+            <span>Review Submission</span>
+            <span class="nav-badge" id="pendingSubmissionsBadgeDropdown" style="display:none;">0</span>
+        `;
+
+        // Insert before the divider that precedes Settings (best match for the design in the screenshot)
+        const settingsLink = dropdown.querySelector('a[onclick*="openSettings"], a.dropdown-item[onclick*="openSettings"]');
+        const insertBefore = settingsLink?.previousElementSibling?.classList?.contains('dropdown-divider')
+            ? settingsLink.previousElementSibling
+            : settingsLink;
+
+        if (insertBefore) dropdown.insertBefore(link, insertBefore);
+        else dropdown.appendChild(link);
+    }
+
+    // --- Sidebar (optional safety if cached HTML also missed it) ---
+    const sidebarNav = document.querySelector('#sidebar .sidebar-nav');
+    if (sidebarNav && !document.getElementById('reviewSubmissionsNav')) {
+        const a = document.createElement('a');
+        a.href = '#';
+        a.className = 'nav-item';
+        a.id = 'reviewSubmissionsNav';
+        a.onclick = (e) => {
+            e.preventDefault();
+            openSubmissionsModal();
+        };
+        a.innerHTML = `
+            <i class="fas fa-clipboard-check"></i>
+            <span>Review Submission</span>
+            <span class="nav-badge" id="pendingSubmissionsBadge" style="display:none;">0</span>
+        `;
+
+        // Place it above "Tambah Kuliner" in the sidebar
+        const addKuliner = Array.from(sidebarNav.querySelectorAll('a.nav-item')).find(x => (x.textContent || '').includes('Tambah Kuliner'));
+        if (addKuliner) sidebarNav.insertBefore(a, addKuliner);
+        else sidebarNav.appendChild(a);
+    }
 }
 
 function updatePendingBadge() {

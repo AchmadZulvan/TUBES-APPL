@@ -2,7 +2,7 @@
 // NOTE: Project ini berjalan di GitHub Pages (sub-path), jadi semua URL asset
 // harus disusun berdasarkan scope service worker agar cache tidak salah alamat.
 
-const SW_VERSION = '1.0.4';
+const SW_VERSION = '1.0.5';
 const CACHE_NAME = `lapor-mangan-v${SW_VERSION}`;
 
 const SCOPE_BASE = new URL(self.registration.scope);
@@ -84,7 +84,8 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             (async () => {
                 try {
-                    const response = await fetch(request);
+                    // Use cache: 'reload' to bypass HTTP cache and reduce "stuck on old HTML" issues.
+                    const response = await fetch(new Request(request, { cache: 'reload' }));
                     if (response && response.status === 200) {
                         const cache = await caches.open(CACHE_NAME);
                         cache.put(request, response.clone());
