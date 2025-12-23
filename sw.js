@@ -2,7 +2,7 @@
 // NOTE: Project ini berjalan di GitHub Pages (sub-path), jadi semua URL asset
 // harus disusun berdasarkan scope service worker agar cache tidak salah alamat.
 
-const SW_VERSION = '1.0.6';
+const SW_VERSION = '1.0.7';
 const CACHE_NAME = `lapor-mangan-v${SW_VERSION}`;
 
 const SCOPE_BASE = new URL(self.registration.scope);

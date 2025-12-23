@@ -1723,10 +1723,12 @@ function toggleChat() {
 
 function sendChat() {
     const input = document.getElementById('chatInput');
-    const msg = input.value.trim();
+    if (!input) return;
+    const msg = String(input.value || '').trim();
     if (!msg) return;
 
     const messages = document.getElementById('chatMessages');
+    if (!messages) return;
     messages.innerHTML += `<div class="chat-msg user" style="align-self:flex-end; background:#dcf8c6; padding:8px 12px; border-radius:15px; margin:5px 0; max-width:80%;">${msg}</div>`;
     input.value = '';
 
@@ -1744,8 +1746,26 @@ function sendChat() {
 }
 
 function handleChatKey(e) {
-    if (e.key === 'Enter') sendChat();
+    if (!e) return;
+    if (e.key === 'Enter') {
+        try { e.preventDefault(); } catch { /* ignore */ }
+        sendChat();
+    }
 }
+
+// Compatibility aliases for inline handlers in index.html
+// (index.html uses sendMessage(), handleChatInput(event), sendQuickMessage(text))
+window.toggleChat = toggleChat;
+window.sendMessage = sendChat;
+window.handleChatInput = handleChatKey;
+window.sendQuickMessage = function sendQuickMessage(text) {
+    const input = document.getElementById('chatInput');
+    if (input) {
+        input.value = String(text || '');
+        try { input.focus(); } catch { /* ignore */ }
+    }
+    sendChat();
+};
 
 const MakanBotAI = {
     intents: {
