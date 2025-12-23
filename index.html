@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="style.css?v=10">
+    <link rel="stylesheet" href="style.css?v=11">
 </head>
 
 <body>
@@ -677,7 +677,7 @@
 
 
 
-    <script src="script.js?v=13"></script>
+    <script src="script.js?v=14"></script>
 
     <!-- Check Login Status -->
     <script>
@@ -686,7 +686,7 @@
             const currentUser = localStorage.getItem('lm_currentUser');
             const loginBtn = document.getElementById('loginHeaderBtn');
             const sidebarAuthBtn = document.getElementById('authBtnSidebar');
-            
+
             if (currentUser) {
                 const user = JSON.parse(currentUser);
                 
@@ -730,6 +730,49 @@
                     const userName = encodeURIComponent(user.name);
                     dropdownAvatar.src = `https://ui-avatars.com/api/?name=${userName}&background=FF6B35&color=fff&bold=true`;
                 }
+
+                // Admin-only UI fallback:
+                // Some users still experience stale app-shell JS due to aggressive caching.
+                // This makes the admin link appear based on localStorage state, independent of script.js.
+                try {
+                    const role = String(user.role || '').toLowerCase().trim();
+                    const email = String(user.email || '').toLowerCase().trim();
+                    let adminMode = false;
+                    try {
+                        adminMode = JSON.parse(localStorage.getItem('lm_adminMode') || 'false') === true;
+                    } catch {
+                        adminMode = false;
+                    }
+
+                    const isAdmin = !!(
+                        adminMode ||
+                        role === 'admin' ||
+                        email === 'admin@lapormangan.id' ||
+                        user.isAdmin === true
+                    );
+
+                    const nav = document.getElementById('reviewSubmissionsNav');
+                    if (nav) nav.style.display = isAdmin ? '' : 'none';
+
+                    const dd = document.getElementById('reviewSubmissionsDropdown');
+                    if (dd) dd.style.display = isAdmin ? '' : 'none';
+
+                    // Pending badge (optional)
+                    const submissionsRaw = localStorage.getItem('lm_submissions');
+                    const submissions = submissionsRaw ? (JSON.parse(submissionsRaw) || []) : [];
+                    const pendingCount = Array.isArray(submissions)
+                        ? submissions.filter(s => s && (s.status || 'pending') === 'pending').length
+                        : 0;
+
+                    const badge1 = document.getElementById('pendingSubmissionsBadge');
+                    const badge2 = document.getElementById('pendingSubmissionsBadgeDropdown');
+                    [badge1, badge2].filter(Boolean).forEach((b) => {
+                        b.textContent = String(pendingCount);
+                        b.style.display = (isAdmin && pendingCount > 0) ? '' : 'none';
+                    });
+                } catch {
+                    // Never block rendering
+                }
             }
         }
         
@@ -763,7 +806,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 // Versioned URL to ensure updates propagate (helps when an old cached index.html is stuck)
-                const swUrl = 'sw.js?v=1.0.5';
+                const swUrl = 'sw.js?v=1.0.6';
 
                 navigator.serviceWorker.register(swUrl)
                     .then((reg) => {

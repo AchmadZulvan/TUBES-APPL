@@ -571,6 +571,21 @@
             }
         }
 
+        // Ensure default users exist (so demo admin login works even before visiting index.html)
+        function ensureSeedUsers() {
+            try {
+                const raw = localStorage.getItem('lm_users');
+                const list = raw ? JSON.parse(raw) : [];
+                if (Array.isArray(list) && list.length) return;
+                localStorage.setItem('lm_users', JSON.stringify([
+                    { id: 1, email: 'admin@lapormangan.id', name: 'Admin', password: 'admin123', role: 'admin' },
+                    { id: 2, email: 'user@test.com', name: 'User Test', password: '123456', role: 'user' }
+                ]));
+            } catch {
+                // ignore
+            }
+        }
+
         // Handle Register
         function handleRegister(event) {
             event.preventDefault();
@@ -645,6 +660,7 @@
 
         // Check if already logged in
         window.addEventListener('DOMContentLoaded', () => {
+            ensureSeedUsers();
             const currentUser = localStorage.getItem('lm_currentUser');
             if (currentUser) {
                 // Already logged in, redirect to home
