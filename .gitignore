@@ -1,0 +1,6 @@
+# VS Code workspace settings (often machine-specific)
+.vscode/
+
+# OS junk
+Thumbs.db
+.DS_Store

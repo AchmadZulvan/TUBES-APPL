@@ -1782,6 +1782,7 @@ const MakanBotAI = {
 
     generateResponse(msg) {
         const lower = msg.toLowerCase();
+        const list = Array.isArray(state?.kulinerData) ? state.kulinerData : [];
 
         // Help
         if (this.match(lower, 'askHelp')) return "Aku bisa bantu cari kuliner:\n- 'Yang murah apa?'\n- 'Rekomendasi soto legendaris'\n- 'Oleh-oleh khas Purwokerto'\n- 'Makanan pas hujan'";
@@ -1819,10 +1820,31 @@ const MakanBotAI = {
             return `Mau yang hemat? Coba **${pick.nama}** (${pick.harga}). Dijamin kenyang tapi dompet aman! 💸`;
         }
 
+        // Generic "want to eat" intent: suggest how to query + give a few top picks
+        if (this.match(lower, 'askFood')) {
+            const top = [...list]
+                .sort((a, b) => (getAvgRating(b) - getAvgRating(a)) || String(a.nama || '').localeCompare(String(b.nama || ''), 'id'))
+                .slice(0, 3);
+            const tips = "Ketik kata kunci makanan ya, misalnya: **ayam**, **soto**, **bakso**, **sate**, **gudeg**, atau nama tempatnya.";
+            if (!top.length) return tips;
+            return `${tips}\n\nBeberapa rekomendasi populer saat ini:\n${this.formatRecommendations(top)}`;
+        }
+
         // Default Logic
-        if (lower.includes('soto')) return this.recommend('Soto');
-        if (lower.includes('sate')) return this.recommend('Sate');
-        if (lower.includes('makan')) return "Bingung mau makan apa? Coba fitur 'Acak' di menu filter, atau aku pilihkan **Gudeg Mbah Siti**? 😋";
+        // Category keywords -> show several related recommendations
+        if (lower.includes('ayam')) return this.recommend('Ayam', 5);
+        if (lower.includes('soto')) return this.recommend('Soto', 5);
+        if (lower.includes('bakso')) return this.recommend('Bakso', 5);
+        if (lower.includes('sate')) return this.recommend('Sate', 5);
+        if (lower.includes('gudeg')) return this.recommend('Gudeg', 5);
+        if (lower.includes('lontong')) return this.recommend('Lontong', 5);
+        if (lower.includes('minum') || lower.includes('minuman') || lower.includes('es ') || lower.includes('kopi')) return this.recommend('Minuman', 5);
+
+        // If user types any keyword (e.g., "ayam", "sokaraja", "president"), try to find matching kuliner
+        const queryBased = this.recommendByQuery(lower, 5);
+        if (queryBased) return queryBased;
+
+        if (lower.includes('makan')) return "Bingung mau makan apa? Coba fitur 'Acak' di menu filter, atau ketik kata kunci (contoh: **ayam** / **soto** / **bakso**) biar aku kasih beberapa rekomendasi. 😋";
 
         return "Maaf, aku kurang ngerti. Coba tanya 'kuliner legendaris' atau 'makan murah'. 😊";
     },
@@ -1835,10 +1857,50 @@ const MakanBotAI = {
         return arr[Math.floor(Math.random() * arr.length)] || arr[0];
     },
 
-    recommend(cat) {
-        const items = state.kulinerData.filter(k => k.kategori.includes(cat));
-        if (!items.length) return `Belum ada data ${cat} nih.`;
-        return `Rekomendasi ${cat}: **${items[0].nama}** di ${items[0].alamat}.`;
+    recommend(cat, limit = 3) {
+        const needle = String(cat || '').toLowerCase().trim();
+        const items = (Array.isArray(state?.kulinerData) ? state.kulinerData : [])
+            .filter(k => {
+                const nama = String(k?.nama || '').toLowerCase();
+                const kategori = String(k?.kategori || '').toLowerCase();
+                return (kategori.includes(needle) || nama.includes(needle));
+            })
+            .sort((a, b) => (getAvgRating(b) - getAvgRating(a)) || String(a.nama || '').localeCompare(String(b.nama || ''), 'id'))
+            .slice(0, Math.max(1, Number(limit) || 3));
+
+        if (!items.length) return `Belum ada rekomendasi untuk "${cat}" nih.`;
+        return `Beberapa rekomendasi ${cat}:\n${this.formatRecommendations(items)}`;
+    },
+
+    recommendByQuery(query, limit = 5) {
+        const q = String(query || '').toLowerCase().trim();
+        // Avoid spamming results for very short inputs
+        if (q.length < 3) return '';
+
+        const items = (Array.isArray(state?.kulinerData) ? state.kulinerData : [])
+            .filter(k => {
+                const nama = String(k?.nama || '').toLowerCase();
+                const kategori = String(k?.kategori || '').toLowerCase();
+                return nama.includes(q) || kategori.includes(q);
+            })
+            .sort((a, b) => (getAvgRating(b) - getAvgRating(a)) || String(a.nama || '').localeCompare(String(b.nama || ''), 'id'))
+            .slice(0, Math.max(1, Number(limit) || 5));
+
+        if (!items.length) return '';
+        return `Aku nemu beberapa yang terkait "${q}":\n${this.formatRecommendations(items)}`;
+    },
+
+    formatRecommendations(items) {
+        return (Array.isArray(items) ? items : []).map((k, i) => {
+            const nama = String(k?.nama || '');
+            const kategori = String(k?.kategori || '');
+            const harga = String(k?.harga || '');
+            const alamat = String(k?.alamat || '');
+            const rating = Number.isFinite(getAvgRating(k)) ? getAvgRating(k).toFixed(1) : '0.0';
+            const bits = [kategori, harga].filter(Boolean).join(' • ');
+            const tail = [bits, alamat].filter(Boolean).join(' — ');
+            return `${i + 1}) **${nama}**${tail ? ` — ${tail}` : ''} (★ ${rating})`;
+        }).join('\n');
     }
 };
 
